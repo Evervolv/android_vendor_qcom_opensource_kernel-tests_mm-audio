@@ -90,5 +90,10 @@ void voicememo_help_menu(void);
 /* SND Test Module Interface Definition */
 int sndsetdev_read_params(void);
 void sndsetdev_help_menu(void);
-
+#ifdef AUDIOV2
+/* Voice Enc Test Module Interface Definition */
+int voiceenc_read_params(void);
+int voiceenc_control_handler(void *private_data);
+void voiceenc_help_menu(void);
+#endif
 #endif /* AUDIOTEST_CASE_H */

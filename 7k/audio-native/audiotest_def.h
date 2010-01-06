@@ -50,10 +50,11 @@
 #define AUDIOTEST_TEST_MOD_VOICEMEMO  10
 #define AUDIOTEST_TEST_MOD_PROFILE    11
 #define AUDIOTEST_TEST_MOD_AMRWB_DEC    12
-#define AUDIOTEST_TEST_MOD_ADPCM_DEC  13
-#define AUDIOTEST_TEST_MOD_WMAPRO_DEC 14
+#define AUDIOTEST_TEST_MOD_WMAPRO_DEC 13
+#define AUDIOTEST_TEST_MOD_ADPCM_DEC  14
+#define AUDIOTEST_TEST_MOD_VOICE_ENC    15
 /* If added new module, need to update this number */
-#define AUDIOTEST_MAX_TEST_MOD 15
+#define AUDIOTEST_MAX_TEST_MOD 16
 
 #define false 0
 #define true (!false)

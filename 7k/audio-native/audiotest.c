@@ -179,7 +179,9 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 	profile_control_handler, amrwb_play_control_handler,
 	wmapro_play_control_handler,
 #ifdef AUDIOV2
-	adpcm_play_control_handler,
+	adpcm_play_control_handler, voiceenc_control_handler,
+#else
+	NULL, NULL,
 #endif
 };
 
@@ -234,6 +236,9 @@ struct audiotest_case_type audiotest_case_list[] = {
 	{ "voicememo", voicememo_read_params, voicememo_help_menu, NULL } ,
 	{ "profile", profile_read_params, profile_help_menu, NULL } ,
 	{ "sndsetdev", sndsetdev_read_params, sndsetdev_help_menu, NULL },
+#ifdef AUDIOV2
+	{ "voiceenc", voiceenc_read_params, voiceenc_help_menu, NULL } ,
+#endif
 };
 
 #define AUDIOTEST_MAX_NUM_CASES \
