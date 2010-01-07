@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ void pcmrec_help_menu(void);
 int adpcmplay_read_params(void);
 int adpcm_play_control_handler(void *private_data);
 void adpcmplay_help_menu(void);
+
 #endif
 
 /* WMA Test Module Interface Definition */
@@ -95,5 +96,12 @@ void sndsetdev_help_menu(void);
 int voiceenc_read_params(void);
 int voiceenc_control_handler(void *private_data);
 void voiceenc_help_menu(void);
+
+#if defined(QC_PROP)
+/* Dev Control Test Module definition */
+int devctl_read_params(void);
+void devctl_help_menu(void);
+#endif
+
 #endif
 #endif /* AUDIOTEST_CASE_H */

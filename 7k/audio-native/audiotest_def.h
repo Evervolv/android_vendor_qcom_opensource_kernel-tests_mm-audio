@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,9 +52,10 @@
 #define AUDIOTEST_TEST_MOD_AMRWB_DEC    12
 #define AUDIOTEST_TEST_MOD_WMAPRO_DEC 13
 #define AUDIOTEST_TEST_MOD_ADPCM_DEC  14
-#define AUDIOTEST_TEST_MOD_VOICE_ENC    15
+#define AUDIOTEST_TEST_MOD_VOICE_ENC  15
+#define AUDIOTEST_TEST_MOD_DEVMGR     16
 /* If added new module, need to update this number */
-#define AUDIOTEST_MAX_TEST_MOD 16
+#define AUDIOTEST_MAX_TEST_MOD 17
 
 #define false 0
 #define true (!false)

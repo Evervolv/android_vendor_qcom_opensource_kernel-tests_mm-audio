@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -420,9 +420,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int device_id;
 	int control = 0;
-	const char *device = "handset_rx";
 #endif
 
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
@@ -450,20 +448,12 @@ static int initiate_play(struct audtest_config *clnt_config,
 			close(afd);
 			return -1;
 		}
-
-		device_id = enable_device_rx(device);
-		if (device_id < 0) {
+#if defined(QC_PROP)
+		if (devmgr_register_session(dec_id) < 0) {
 			ret = -1;
 			goto exit;
 		}
-		printf("device_id = %d\n", device_id);
-		printf("dec_id = %d\n", dec_id);
-
-		if (msm_route_stream(1, dec_id, device_id, 1)) {
-			perror("could not set stream routing\n");
-			ret = -1;
-			goto err_device_disable;
-		}
+#endif
 	}
 #endif
 
@@ -472,7 +462,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 	if (ioctl(afd, AUDIO_GET_CONFIG, &config)) {
 		perror("could not get config");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	if (audio_data->mode)
@@ -483,13 +473,13 @@ static int initiate_play(struct audtest_config *clnt_config,
 	if (ioctl(afd, AUDIO_SET_CONFIG, &config)) {
 		perror("could not set config");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	if (ioctl(afd, AUDIO_GET_AAC_CONFIG, &aac_config)) {
 		perror("could not get aac config");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	aac_config.format = clnt_config->fmt_config.aac.format_type;
@@ -501,14 +491,14 @@ static int initiate_play(struct audtest_config *clnt_config,
 	if (ioctl(afd, AUDIO_SET_AAC_CONFIG, &aac_config)) {
 		perror("could not set aac config");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	buf = (char*) malloc(sizeof(char) * config.buffer_size);
 	if (buf == NULL) {
 		perror("fail to allocate buffer\n");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	if (audio_data->mode)
@@ -533,7 +523,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 			printf("could not get PCM config\n");
 			free(buf);
 			ret = -1;
-			goto device_err;
+			goto err_state;
 		}
 		printf(" config_rec.pcm_feedback = %d, \
 			config_rec.buffer_count = %d , \
@@ -548,7 +538,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 			printf("could not allocate memory for decoding\n");
 			free(buf);
 			ret = -1;
-			goto device_err;
+			goto err_state;
 		}
 		memset(audio_data->recbuf, 0, config_rec.buffer_size);
 		if (ioctl(afd, AUDIO_SET_PCM_CONFIG, &config_rec)) {
@@ -556,7 +546,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 			free(audio_data->recbuf);
 			free(buf);
 			ret = -1;
-			goto device_err;
+			goto err_state;
 		}
 		pthread_create(&thread, NULL, aac_dec, (void *) audio_data);
 	}
@@ -651,15 +641,11 @@ static int initiate_play(struct audtest_config *clnt_config,
 		printf("aac_play: Unable to start driver\n");
 	}
 	free(buf);
-device_err:
-#ifdef AUDIOV2
+err_state:
+#if defined(QC_PROP) && defined(AUDIOV2)
 	if (!audio_data->mode) {
-		if (msm_route_stream(1, dec_id, device_id, 0)) {
-			perror("could not reset stream routing\n");
+		if (devmgr_unregister_session(dec_id) < 0)
 			ret = -1;
-		}
-err_device_disable:
-		disable_device_rx(device_id);
 	}
 exit:
 #endif

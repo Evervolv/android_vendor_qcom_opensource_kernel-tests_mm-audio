@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,6 +183,7 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 #else
 	NULL, NULL,
 #endif
+	NULL
 };
 
 int pb_control_read_params(void) {
@@ -238,6 +239,9 @@ struct audiotest_case_type audiotest_case_list[] = {
 	{ "sndsetdev", sndsetdev_read_params, sndsetdev_help_menu, NULL },
 #ifdef AUDIOV2
 	{ "voiceenc", voiceenc_read_params, voiceenc_help_menu, NULL } ,
+#if defined(QC_PROP)
+	{ "devctl", devctl_read_params, devctl_help_menu, NULL }
+#endif
 #endif
 };
 
@@ -270,12 +274,8 @@ void audiotest_cmd_svr(void) {
 		fd = open("/tmp/audio_test", O_RDONLY);
 #endif
 
-#ifdef AUDIOV2
-	control = msm_mixer_open("/dev/snd/controlC0", 0);
-	if (control < 0) {
-		perror("could not open mixer interface\n");
-		return -1;
-	}
+#if defined(QC_PROP) && defined(AUDIOV2)
+	audiotest_init_devmgr();
 #endif
 
 		while (1) {
@@ -319,8 +319,8 @@ void audiotest_cmd_svr(void) {
 		remove("/tmp/audio_test");
 #endif
 
-#ifdef AUDIOV2
-		msm_mixer_close();
+#if defined(QC_PROP) && defined(AUDIOV2)
+		audiotest_deinit_devmgr();
 #endif
 		wait_child_threads();
 		audiotest_case_deinit();

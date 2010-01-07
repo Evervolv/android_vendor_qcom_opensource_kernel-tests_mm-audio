@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,9 +46,7 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 	int ret = 0;
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int device_id;
 	int control = 0;
-	const char *device = "handset_rx";
 #endif
 
 	afd = open(dev_file_name, O_WRONLY);
@@ -66,25 +64,18 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 		close(afd);
 		return -1;
 	}
-	device_id = enable_device_rx(device);
-	if (device_id < 0) {
+#if defined(QC_PROP)
+    if (devmgr_register_session(dec_id) < 0) {
 		ret = -1;
 		goto exit;
-	}
-	printf("device_id = %d\n", device_id);
-	printf("dec_id = %d\n", dec_id);
-
-	if (msm_route_stream(1, dec_id, device_id, 1)) {
-		perror("could not set stream routing\n");
-		ret = -1;
-		goto err_device_disable;
-	}
+    }
+#endif
 #endif
 
 	if (ioctl(afd, AUDIO_GET_CONFIG, &config)) {
 		perror("could not get config");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	config.channel_count = channels;
@@ -92,14 +83,14 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 	if (ioctl(afd, AUDIO_SET_CONFIG, &config)) {
 		perror("could not set config");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	buf = (char*) malloc(sizeof(char) * config.buffer_size);
 	if (buf == NULL) {
 		perror("fail to allocate buffer\n");
 		ret = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	printf("initiate_play: buffer_size=%d, buffer_count=%d\n", config.buffer_size,
@@ -139,14 +130,10 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 		printf("pcm_play: Unable to start driver\n");
 	}
 	free(buf);
-device_err:
-#ifdef AUDIOV2
-	if (msm_route_stream(1, dec_id, device_id, 0)) {
-		perror("could not reset stream routing\n");
-		ret = -1;
-	}
-err_device_disable:
-	disable_device_rx(device_id);
+err_state:
+#if defined(QC_PROP) && defined(AUDIOV2)
+	if (devmgr_unregister_session(dec_id) < 0)
+			ret = -1;
 exit:
 #endif
 	close(afd);

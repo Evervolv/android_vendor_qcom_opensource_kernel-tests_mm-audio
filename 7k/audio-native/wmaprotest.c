@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -228,9 +228,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 		(struct audio_pvt_data *) clnt_config->private_data;
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int device_id;
 	int control = 0;
-	const char *device = "handset_rx";
 #endif
 
 	/* Open the file for operation */
@@ -265,19 +263,12 @@ static int wmapro_start(struct audtest_config *clnt_config)
 			close(afd);
 			return -1;
 		}
-		device_id = enable_device_rx(device);
-		if (device_id < 0) {
+#if defined(QC_PROP)
+		if (devmgr_register_session(dec_id) < 0) {
 			ret = -1;
 			goto exit;
 		}
-		printf("device_id = %d\n", device_id);
-		printf("dec_id = %d\n", dec_id);
-
-		if (msm_route_stream(1, dec_id, device_id, 1)) {
-			perror("could not set stream routing\n");
-			retval = -1;
-			goto err_device_disable;
-		}
+#endif
 	}
 #endif
 
@@ -286,7 +277,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 	if (ioctl(afd, AUDIO_GET_CONFIG, &config)) {
 		perror("could not get config");
 		retval = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	if (audio_data->mode)
@@ -296,7 +287,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 	if (ioctl(afd, AUDIO_SET_CONFIG, &config)) {
 		perror("could not set config");
 		retval = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	wmapro_config.armdatareqthr = audio_data->datareqthr;
@@ -330,14 +321,14 @@ static int wmapro_start(struct audtest_config *clnt_config)
 	if (ioctl(afd, AUDIO_SET_WMAPRO_CONFIG, &wmapro_config)) {
 		perror("could not set WMAPRO config");
 		retval = -1;
-		goto device_err;
+		goto err_state;
 	}
 
 	transcodebuf = (char *)malloc(config.buffer_size);
 	if (!transcodebuf) {
 		printf("could not allocate memory for store transcoded data\n");
 		retval = -1;
-		goto device_err;
+		goto err_state;
 	}
 	memset(transcodebuf, 0, config.buffer_size);
 	printf("transcodebuf = %d\n", (int) transcodebuf);
@@ -358,7 +349,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 		if (ioctl(afd, AUDIO_GET_PCM_CONFIG, &config_rec)) {
 			printf("could not get PCM config\n");
 			retval = -1;
-			goto device_err;
+			goto err_state;
 		}
 		printf("config_rec.pcm_feedback=%d config_rec.buffer_count=%d \
 			       config_rec.buffer_size=%d \n",
@@ -370,13 +361,13 @@ static int wmapro_start(struct audtest_config *clnt_config)
 		if (!audio_data->recbuf) {
 			printf("could not allocate memory for decoding\n");
 			retval = -1;
-			goto device_err;
+			goto err_state;
 		}
 		memset(audio_data->recbuf, 0, config_rec.buffer_size);
 		if (ioctl(afd, AUDIO_SET_PCM_CONFIG, &config_rec)) {
 			printf("could not set PCM config\n");
 			retval = -1;
-			goto device_err;
+			goto err_state;
 		}
 		pthread_create(&thread, NULL, wmapro_dec, (void *)audio_data);
 
@@ -475,15 +466,11 @@ static int wmapro_start(struct audtest_config *clnt_config)
 	ioctl(afd, AUDIO_STOP, 0);
 	printf("count = %d\n", count);
 	ioctl(afd, AUDIO_ABORT_GET_EVENT, 0);
-device_err:
-#ifdef AUDIOV2
+err_state:
+#if defined(QC_PROP) && defined(AUDIOV2)
 	if (!audio_data->mode) {
-		if (msm_route_stream(1, dec_id, device_id, 0)) {
-			perror("could not reset stream routing\n");
-			retval = -1;
-		}
-err_device_disable:
-		disable_device_rx(device_id);
+		if (devmgr_unregister_session(dec_id) < 0)
+			ret = -1;
 	}
 exit:
 #endif
