@@ -955,6 +955,13 @@ int aac_rec(struct audtest_config *config)
 	}
 	printf("device_id = %d\n", device_id);
 	printf("enc_id = %d\n", enc_id);
+	if (msm_route_stream(2, enc_id, device_id, 1)) {
+		perror("\n could not set stream routing\n");
+		disable_device_tx(device_id);
+		close(fd);
+		close(afd);
+		return -1;
+	}
 #endif
 
   config->private_data = (void*) afd;
@@ -1001,7 +1008,7 @@ int aac_rec(struct audtest_config *config)
     goto fail;
   }
 
-  if (ioctl(afd, AUDIO_START, 0)) {
+  if (ioctl(afd, AUDIO_START, 0) < 0) {
     perror("cannot start audio");
     goto fail;
   }
@@ -1034,7 +1041,10 @@ int aac_rec(struct audtest_config *config)
   close(fd);
 
 #ifdef AUDIOV2
-	disable_device_tx(device_id);
+  if (msm_route_stream(2, enc_id, device_id, 0)) {
+	perror("\n could not re-set stream routing\n");
+  }
+  disable_device_tx(device_id);
 #endif
 
   return 0;
@@ -1045,10 +1055,10 @@ int aac_rec(struct audtest_config *config)
 	free(buf);
   close(fd);
 #ifdef AUDIOV2
- if (msm_en_device(device_id, 0)) {
-	perror("could not disable device\n");
- }
- msm_mixer_close();
+  if (msm_route_stream(2, enc_id, device_id, 0)) {
+	perror("\n could not re-set stream routing\n");
+  }
+  disable_device_tx(device_id);
 #endif
   unlink(config->file_name);
   return -1;

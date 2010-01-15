@@ -238,22 +238,25 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		goto device_err;
 	}
 
-	if (rec_source > VOC_REC_BOTH ) {
-		if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
-			perror("could not get encoder id\n");
-			close(fd);
-			close(afd);
-			return -1;
-		}
-		device_id = enable_device_tx(device);
-		if (device_id < 0) {
-			close(fd);
-			close(afd);
-			return -1;
-		}
-		printf("device_id = %d\n", device_id);
-		printf("enc_id = %d\n", enc_id);
+	if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
+		perror("could not get encoder id\n");
+		close(fd);
+		close(afd);
+		return -1;
 	}
+	device_id = enable_device_tx(device);
+	if (device_id < 0) {
+		close(fd);
+		close(afd);
+		return -1;
+	}
+	printf("device_id = %d\n", device_id);
+	printf("enc_id = %d\n", enc_id);
+	if (msm_route_stream(2, enc_id, device_id, 1)) {
+		perror("\n could not set stream routing\n");
+		goto fail;
+	}
+
 	/* Config param */
 	if(ioctl(afd, AUDIO_GET_STREAM_CONFIG, &cfg)) {
 		printf(" Error getting buf config param AUDIO_GET_CONFIG \n");
@@ -408,15 +411,17 @@ done:
 	printf("Secondary encoder stopped \n");
 	close(afd);
 	close(fd);
-	if (rec_source > VOC_REC_BOTH ) {
-		disable_device_tx(device_id);
+	if (msm_route_stream(2, enc_id, device_id, 0)) {
+		perror("\n could not re-set stream routing\n");
 	}
+	disable_device_tx(device_id);
 	return 0;
 fail:
 	close(afd);
-	if (rec_source > VOC_REC_BOTH ) {
-		disable_device_tx(device_id);
+	if (msm_route_stream(2, enc_id, device_id, 0)) {
+		perror("\n could not re-set stream routing\n");
 	}
+	disable_device_tx(device_id);
 device_err:
 	close(fd);
 	unlink(clnt_config->file_name);
