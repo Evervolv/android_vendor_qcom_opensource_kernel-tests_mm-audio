@@ -126,7 +126,9 @@ static void *mp3_dec(void *arg)
 		#endif
 
 		if (len < 0) {
-			if (audio_data->flush_enable == 1 && errno == EBUSY) {
+			if ((audio_data->flush_enable == 1 ||
+				audio_data->outport_flush_enable == 1)
+				&& errno == EBUSY) {
 				printf("Flush in progress\n");
 				usleep(5000);
 				continue;
@@ -209,6 +211,23 @@ static void *event_notify(void *arg)
 					DRIVER OF TYPE: AUDIO_EVENT_RESUME : \
 					%d\n", suspend_event.event_type);
 				audio_data->suspend = 0;
+			} else if
+			(suspend_event.event_type == AUDIO_EVENT_STREAM_INFO) {
+				printf("event_notify: STREAM_INFO EVENT FROM \
+					DRIVER:%d\n", suspend_event.event_type);
+				printf("codec_type : %d\nchan_info : %d\n\
+					sample_rate : %d\nstream_info: %d\n",
+				 suspend_event.event_payload.stream_info.codec_type,
+				 suspend_event.event_payload.stream_info.chan_info,
+				 suspend_event.event_payload.stream_info.sample_rate,
+				 suspend_event.event_payload.stream_info.bit_stream_info);
+				#ifdef AUDIOV2
+				if (audio_data->mode) {
+					audio_data->outport_flush_enable = 1;
+					ioctl(afd, AUDIO_OUTPORT_FLUSH, 0);
+					audio_data->outport_flush_enable = 0;
+				}
+				#endif
 			}
 		}
 	} while (1);
