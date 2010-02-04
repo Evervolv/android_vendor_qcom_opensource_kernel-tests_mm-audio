@@ -48,24 +48,38 @@ unsigned short devmgr_sid_array[DEVMGR_MAX_PLAYBACK_SESSION];
 static int devmgr_sid_count;
 
 const char *devctl_help_text =
-"\n\Device Control Help: MAINLY USED FOR SWITCHING THE AUDIO DEVICE.\n\
-All Active playbacks will be routed to Device mentioned in this     \n\
-command. Device IDs are generated dynamically from the driver.      \n\
-Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test \n\
-       echo \"devctl -cmd=exit\" > /data/audio_test                 \n\
-where x = any of the supported device IDs listed below,             \n\
-exit command de-inits the device manager and destroys the thread    \n\
-Note:                                                               \n\
-(i)   Handset RX is set as default device for all playbacks         \n\
-(ii)  After a device switch, audio will be routed to the last set   \n\
-      device                                                        \n\
-(iii) Device List and their corresponding IDs can be got using      \n\
-      \"mm-audio-native-test -format devctl\" and also is displayed \n\
-      during beginning of any playback session                      \n\
-(iv)  If you gave \"exit\" command, it will route all active        \n\
-      streams to the default device, then again you can change      \n\
-      the device                                                    \n\
-(v)   Recommended usage of this command is during the media         \n\
+"\n\Device Control Help: MAINLY USED FOR SWITCHING THE AUDIO DEVICE.	\n\
+All Active playbacks will be routed to Device mentioned in this        \n\
+command. Device IDs are generated dynamically from the driver.		\n\
+Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
+       echo \"devctl -cmd=exit\" > /data/audio_test                 	\n\
+       For making voice loopback from application side:-	    	\n\
+	To start a voice call, input these commands:		    	\n\
+        echo \"devctl -cmd=voice_route -txdev_id=x -rxdev_id=y\" >  	\n\
+	/data/audio_test					    	\n\
+	echo \"devctl -cmd=enable_dev -dev_id=x\" > /data/audio_test	\n\
+	echo \"devctl -cmd=enable_dev -dev_id=y\" > /data/audio_test	\n\
+	echo \"devctl -cmd=start_voice\" > /data/audio_test	    	\n\
+	To mute/unmute:						    	\n\
+	echo \"devctl -cmd=voice_tx_mute -mute=z\" > /data/audio_test	\n\
+	To end started voice call, input these commands: 	    	\n\
+	echo \"devctl -cmd=end_voice\" > /data/audio_test	    	\n\
+	echo \"devctl -cmd=disable_dev -dev_id=x\" > /data/audio_test	\n\
+	echo \"devctl -cmd=disable_dev -dev_id=y\" > /data/audio_test	\n\
+where x,y = any of the supported device IDs listed below,           	\n\
+z = 0/1 where 0 is unmute, 1 is mute 				    	\n\
+exit command de-inits the device manager and destroys the thread    	\n\
+Note:                                                               	\n\
+(i)   Handset RX is set as default device for all playbacks         	\n\
+(ii)  After a device switch, audio will be routed to the last set   	\n\
+      device                                                        	\n\
+(iii) Device List and their corresponding IDs can be got using      	\n\
+      \"mm-audio-native-test -format devctl\" and also is displayed 	\n\
+      during beginning of any playback session                      	\n\
+(iv)  If you gave \"exit\" command, it will route all active        	\n\
+      streams to the default device, then again you can change      	\n\
+      the device                                                    	\n\
+(v)   Recommended usage of this command is during the media         	\n\
       playbacks";
 
 void devctl_help_menu(void)
@@ -349,6 +363,25 @@ int devmgr_devctl_handler()
 					int volume = atoi(&token[sizeof
 							("-volume=") - 1]);
 					msm_set_voice_rx_vol(volume);
+				}
+			} else if (!strcmp(token, "start_voice")) {
+			       /*
+				* User will be able to do voice loopback and
+				* mute or unmute voice path. This test app
+				* exercises the voice call API just from
+				* application side; Same should be invoked
+				* from modem side to make it work
+				*/
+				msm_start_voice();
+			} else if (!strcmp(token, "end_voice")) {
+				msm_end_voice();
+			} else if (!strcmp(token, "voice_tx_mute")) {
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-mute=", (sizeof
+							("-mute=") - 1))) {
+					int mute = atoi(&token[sizeof
+							("-mute=") - 1]);
+					msm_set_voice_tx_mute(mute);
 				}
 			} else if (!strcmp(token, "exit")) {
 				audiotest_deinit_devmgr();
