@@ -57,6 +57,8 @@
 /* If added new module, need to update this number */
 #define AUDIOTEST_MAX_TEST_MOD 17
 
+#define DIR_RX 1
+#define DIR_TX 2
 #define false 0
 #define true (!false)
 
@@ -136,10 +138,4 @@ typedef void (*case_deinit)(void);
 /* Thread context management functions  */
 struct audiotest_thread_context* get_free_context(void);
 void free_context(struct audiotest_thread_context *context);
-#ifdef AUDIOV2
-extern int enable_device_tx(const char *device_name);
-extern int disable_device_tx(int device_id);
-extern int enable_device_rx(const char *device_name);
-extern int disable_device_rx(int device_id);
-#endif
 #endif /* AUDIOTEST_DEFS_H */

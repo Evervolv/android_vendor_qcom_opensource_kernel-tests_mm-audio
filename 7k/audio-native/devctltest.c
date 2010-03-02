@@ -37,22 +37,27 @@
 #include "control.h"
 
 #ifdef AUDIOV2
-#define DEVMGR_MAX_PLAYBACK_SESSION 8
+#define DEVMGR_MAX_PLAYBACK_SESSION 4
+#define DEVMGR_MAX_RECORDING_SESSION 2
 #define DEVMGR_DEFAULT_SID 65523
 
-static int devmgr_devid;
-static int devmgr_dev_count;
+static int devmgr_devid_rx;
+static int devmgr_devid_tx;
+static int devmgr_dev_count_tx;
+static int devmgr_dev_count_rx;
 static int devmgr_init_flag;
 static int devmgr_mixer_init_flag;
-unsigned short devmgr_sid_array[DEVMGR_MAX_PLAYBACK_SESSION];
-static int devmgr_sid_count;
+unsigned short devmgr_sid_rx_array[DEVMGR_MAX_PLAYBACK_SESSION];
+unsigned short devmgr_sid_tx_array[DEVMGR_MAX_PLAYBACK_SESSION];
+static int devmgr_sid_count_rx = 0;
+static int devmgr_sid_count_tx = 0;
 
 const char *devctl_help_text =
 "\n\Device Control Help: MAINLY USED FOR SWITCHING THE AUDIO DEVICE.	\n\
 All Active playbacks will be routed to Device mentioned in this        \n\
 command. Device IDs are generated dynamically from the driver.		\n\
 Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
-       echo \"devctl -cmd=exit\" > /data/audio_test                 	\n\
+       echo \"devctl -cmd=dev_switch_tx -dev_id=x\" > /data/audio_test	\n\
        For making voice loopback from application side:-	    	\n\
 	To start a voice call, input these commands:		    	\n\
         echo \"devctl -cmd=voice_route -txdev_id=x -rxdev_id=y\" >  	\n\
@@ -68,19 +73,13 @@ Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
 	echo \"devctl -cmd=disable_dev -dev_id=y\" > /data/audio_test	\n\
 where x,y = any of the supported device IDs listed below,           	\n\
 z = 0/1 where 0 is unmute, 1 is mute 				    	\n\
-exit command de-inits the device manager and destroys the thread    	\n\
 Note:                                                               	\n\
-(i)   Handset RX is set as default device for all playbacks         	\n\
+(i)   Handset RX/TX is set as default device for all playbacks/recordings \n\
 (ii)  After a device switch, audio will be routed to the last set   	\n\
       device                                                        	\n\
 (iii) Device List and their corresponding IDs can be got using      	\n\
       \"mm-audio-native-test -format devctl\" and also is displayed 	\n\
-      during beginning of any playback session                      	\n\
-(iv)  If you gave \"exit\" command, it will route all active        	\n\
-      streams to the default device, then again you can change      	\n\
-      the device                                                    	\n\
-(v)   Recommended usage of this command is during the media         	\n\
-      playbacks";
+      during beginning of any playback session                      \n";
 
 void devctl_help_menu(void)
 {
@@ -110,90 +109,148 @@ void devctl_help_menu(void)
 	}
 }
 
-int devmgr_disable_device(int dev_id)
+int devmgr_disable_device(int dev_id, unsigned short route_dir)
 {
-
-	devmgr_dev_count--;
-	if (devmgr_dev_count == 0) {
+	if (route_dir == DIR_RX){
+		devmgr_dev_count_rx--;
+		if (devmgr_dev_count_rx == 0) {
+			if (msm_en_device(dev_id, 0) < 0)
+				return -1;
+		}
+	}
+	else if (route_dir == DIR_TX){
+		devmgr_dev_count_tx--;
+		if (devmgr_dev_count_tx == 0) {
 		if (msm_en_device(dev_id, 0) < 0)
 			return -1;
 	}
+	}
+	else
+		perror("devmgr_disable_device: Invalid route direction\n");
 	return 0;
 }
 
-int devmgr_enable_device(int dev_id)
+int devmgr_enable_device(int dev_id, unsigned short route_dir)
 {
 
 	if (msm_en_device(dev_id, 1) < 0)
 		return -1;
-	devmgr_dev_count++;
+	if (route_dir == DIR_RX)
+		devmgr_dev_count_rx++;
+	else if (route_dir == DIR_TX)
+		devmgr_dev_count_tx++;
+	else
+		perror("devmgr_enable_device: Invalid route direction\n");
 	return 0;
 }
 
-int devmgr_register_session(unsigned short session_id)
+int devmgr_register_session(unsigned short session_id, unsigned short route_dir)
 {
 
 	printf("devmgr_register_session: Registering Session ID = %d\n",
 								session_id);
-	printf("%s\n", devctl_help_text);
-	if ((devmgr_sid_count < DEVMGR_MAX_PLAYBACK_SESSION) &&
-		(devmgr_sid_array[devmgr_sid_count] == DEVMGR_DEFAULT_SID))
-		devmgr_sid_array[devmgr_sid_count++] = session_id;
+	if (route_dir == DIR_RX){
+		if ((devmgr_sid_count_rx < DEVMGR_MAX_PLAYBACK_SESSION) &&
+		(devmgr_sid_rx_array[devmgr_sid_count_rx] == DEVMGR_DEFAULT_SID))
+			devmgr_sid_rx_array[devmgr_sid_count_rx++] = session_id;
 
-	if (msm_route_stream(1, session_id, devmgr_devid, 1) < 0) {
+		if (devmgr_enable_device(devmgr_devid_rx, DIR_RX) < 0){
+			perror("could not enable RX device\n");
+			return -1;
+		}
+		if (msm_route_stream(DIR_RX, session_id, devmgr_devid_rx, 1) < 0) {
+			perror("could not route stream to Device\n");
+			if (devmgr_disable_device(devmgr_devid_rx, DIR_RX) < 0)
+				perror("could not disable device\n");
+			return -1;
+		}
+	}
+	else if (route_dir == DIR_TX){
+		if ((devmgr_sid_count_tx < DEVMGR_MAX_RECORDING_SESSION) &&
+		(devmgr_sid_tx_array[devmgr_sid_count_tx] == DEVMGR_DEFAULT_SID))
+			devmgr_sid_tx_array[devmgr_sid_count_tx++] = session_id;
+		if (devmgr_enable_device(devmgr_devid_tx, DIR_TX) < 0){
+			perror("could not enable TX device\n");
+			return -1;
+		}
+
+		if (msm_route_stream(DIR_TX, session_id, devmgr_devid_tx, 1) < 0) {
 		perror("could not route stream to Device\n");
-		if (devmgr_disable_device(devmgr_devid) < 0)
+			if (devmgr_disable_device(devmgr_devid_tx, DIR_TX) < 0)
 			perror("could not disable device\n");
 		return -1;
 	}
+	}
+	else
+		perror("devmgr_register_session: Invalid route direction.\n");
 	return 0;
 }
 
-int devmgr_unregister_session(unsigned short session_id)
+int devmgr_unregister_session(unsigned short session_id, unsigned short route_dir)
 {
 
 	int index = 0;
 	printf("devmgr_unregister_session: Unregistering Session ID = %d\n",
 	session_id);
-	while (index < devmgr_sid_count) {
-		if (session_id == devmgr_sid_array[index])
+	if (route_dir == DIR_RX){
+		while (index < devmgr_sid_count_rx) {
+			if (session_id == devmgr_sid_rx_array[index])
 			break;
 		index++;
 	}
-	while (index < (devmgr_sid_count-1)) {
-		devmgr_sid_array[index]  =  devmgr_sid_array[index+1];
+		while (index < (devmgr_sid_count_rx-1)) {
+			devmgr_sid_rx_array[index]  =  devmgr_sid_rx_array[index+1];
 		index++;
 	}
 	/* Reset the last entry */
-	devmgr_sid_array[index]         = DEVMGR_DEFAULT_SID;
-	devmgr_sid_count--;
+		devmgr_sid_rx_array[index]         = DEVMGR_DEFAULT_SID;
+		devmgr_sid_count_rx--;
 
-	if (msm_route_stream(1, session_id, devmgr_devid, 0) < 0)
+		if (msm_route_stream(DIR_RX, session_id, devmgr_devid_rx, 0) < 0)
 		perror("could not de-route stream to Device\n");
+
+		if (devmgr_disable_device(devmgr_devid_rx, DIR_RX) < 0){
+			perror("could not disable RX device\n");
+		}
+	}else if(route_dir == DIR_TX){
+		while (index < devmgr_sid_count_tx) {
+			if (session_id == devmgr_sid_tx_array[index])
+				break;
+			index++;
+		}
+		while (index < (devmgr_sid_count_tx-1)) {
+			devmgr_sid_tx_array[index]  =  devmgr_sid_tx_array[index+1];
+			index++;
+		}
+		/* Reset the last entry */
+		devmgr_sid_tx_array[index]         = DEVMGR_DEFAULT_SID;
+		devmgr_sid_count_tx--;
+
+		if (msm_route_stream(DIR_TX, session_id, devmgr_devid_tx, 0) < 0)
+			perror("could not de-route stream to Device\n");
+
+		if (devmgr_disable_device(devmgr_devid_tx, DIR_TX) < 0){
+			perror("could not disable TX device\n");
+		}
+	}
+	else
+		perror("devmgr_unregister_session: Invalid route direction\n");
 	return 0;
 }
 
 void audiotest_deinit_devmgr(void)
 {
 
-	int index, dev_source, dev_dest;
-	const char *def_device = "handset_rx";
+	int alsa_ctl;
 
 	if (devmgr_init_flag && devmgr_mixer_init_flag) {
-		dev_source = devmgr_devid;
-		dev_dest = msm_get_device(def_device);
-		if (dev_source != dev_dest) {
-			devmgr_devid = dev_dest;
-			for (index = 0; index < devmgr_sid_count; index++) {
-				msm_route_stream(1, devmgr_sid_array[index],
-								 dev_dest, 1);
-				if ((devmgr_disable_device(dev_source)) == 0) {
-					if ((devmgr_enable_device(dev_dest))
-									== 0) {
-						printf("%s: Routing all streams to default device \n",__func__);
-					}
-				}
-			}
+		alsa_ctl = msm_mixer_close();
+		if (alsa_ctl < 0)
+			perror("Fail to close ALSA MIXER\n");
+		else{
+			printf("%s: Closed ALSA MIXER\n", __func__);
+			devmgr_mixer_init_flag = 0;
+			devmgr_init_flag = 0;
 		}
 	}
 }
@@ -201,9 +258,10 @@ void audiotest_deinit_devmgr(void)
 void audiotest_init_devmgr(void)
 {
 
-	int i, alsa_ctl, dev_cnt, device_id;
+	int i, alsa_ctl, dev_cnt, device_id, dev_dest;
 	const char **device_names;
-	const char *def_device = "handset_rx";
+	const char *def_device_rx = "handset_rx";
+	const char *def_device_tx = "handset_tx";
 
 	if (!devmgr_mixer_init_flag) {
 		alsa_ctl = msm_mixer_open("/dev/snd/controlC0", 0);
@@ -222,14 +280,14 @@ void audiotest_init_devmgr(void)
 				printf("device name %s:dev_id: %d\n", device_names[i], device_id);
 			i++;
 		}
-		devmgr_devid = msm_get_device(def_device);
-		printf("Enabling Device = %d\n", devmgr_devid);
-		if (devmgr_enable_device(devmgr_devid) < 0) {
-			perror("could not enable device\n");
-			return;
-		}
+		printf("Setting default RX =  %d\n", devmgr_devid_rx);
+		devmgr_devid_rx = msm_get_device(def_device_rx);
+		printf("Setting default TX =  %d\n", devmgr_devid_tx);
+		devmgr_devid_tx = msm_get_device(def_device_tx);
 		for (i = 0; i < DEVMGR_MAX_PLAYBACK_SESSION; i++)
-			devmgr_sid_array[i] = DEVMGR_DEFAULT_SID;
+			devmgr_sid_rx_array[i] = DEVMGR_DEFAULT_SID;
+		for (i = 0; i < DEVMGR_MAX_RECORDING_SESSION; i++)
+			devmgr_sid_tx_array[i] = DEVMGR_DEFAULT_SID;
 		devmgr_init_flag = 1;
 	}
     return;
@@ -253,30 +311,81 @@ int devmgr_devctl_handler()
 						(sizeof("-dev_id=") - 1))) {
 					dev_dest = atoi(&token
 						[sizeof("-dev_id=") - 1]);
-					dev_source = devmgr_devid;
+					dev_source = devmgr_devid_rx;
 					if (devmgr_mixer_init_flag &&
 							devmgr_init_flag) {
 						if (dev_source != dev_dest) {
-							devmgr_devid = dev_dest;
-							printf("%s: Device Switch from = %d to = %d\n",	__func__, dev_source, dev_dest);
+							printf("%s: Device Switch from = %d to = %d\n",	__func__,
+						dev_source, dev_dest);
+							if (devmgr_sid_count_rx == 0){
+								devmgr_devid_rx = dev_dest;
+								printf("%s: Device Switch Success\n",__func__);
+							}
+
 							for (index = 0;
-						 index < devmgr_sid_count;
+                          index < devmgr_sid_count_rx;
 								 index++) {
 								msm_route_stream
-						(1, devmgr_sid_array[index],
+                          (DIR_RX, devmgr_sid_rx_array[index],
 								dev_dest, 1);
 								if (
 						(devmgr_disable_device
-							(dev_source)) == 0) {
+                                (dev_source, DIR_RX)) == 0) {
+									msm_route_stream(DIR_RX, devmgr_sid_rx_array[index],
+								dev_source, 0);
 									if (
-						(devmgr_enable_device(dev_dest)
+                                (devmgr_enable_device(dev_dest, DIR_RX)
+                                    ) == 0) {
+                            printf("%s: Device Switch Success\n",__func__);
+							devmgr_devid_rx = dev_dest;
+											}
+							        }
+							}
+						} else {
+							printf("%s(): Device has not changed as current device is:%d\n",
+						__func__, dev_dest);
+						}
+					}
+				}
+			} else if (!strcmp(token, "dev_switch_tx")) {
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-dev_id=",
+						(sizeof("-dev_id=") - 1))) {
+					dev_dest = atoi(&token
+						[sizeof("-dev_id=") - 1]);
+					dev_source = devmgr_devid_tx;
+					if (devmgr_mixer_init_flag &&
+							devmgr_init_flag) {
+						if (dev_source != dev_dest) {
+							printf("%s: Device Switch from = %d to = %d\n",	__func__,
+						dev_source, dev_dest);
+							if (devmgr_sid_count_tx == 0){
+								devmgr_devid_tx = dev_dest;
+								printf("%s: Device Switch Success\n",__func__);
+							}
+
+							for (index = 0;
+                          index < devmgr_sid_count_tx;
+                                 index++) {
+								msm_route_stream
+                          (DIR_TX, devmgr_sid_tx_array[index],
+                                         dev_dest, 1);
+								if (
+                          (devmgr_disable_device
+                                (dev_source, DIR_TX)) == 0) {
+									msm_route_stream(DIR_TX, devmgr_sid_tx_array[index],
+								dev_source, 0);
+									if (
+                                (devmgr_enable_device(dev_dest, DIR_TX)
 							) == 0) {
 					printf("%s: Device Switch Success\n",__func__);
+							devmgr_devid_tx = dev_dest;
 									}
 								}
 							}
 						} else {
-							printf("%s(): Device has not changed as current device is:%d\n", __func__, devmgr_devid);
+							printf("%s(): Device has not changed as current device is:%d\n",
+						__func__, dev_dest);
 						}
 					}
 				}
@@ -308,7 +417,22 @@ int devmgr_devctl_handler()
 						sid = atoi(&token[sizeof
 							("-sid=") - 1]);
 						msm_route_stream
-							(1, sid, dev_id, 1);
+							(DIR_RX, sid, dev_id, 1);
+					}
+				}
+			} else if (!strcmp(token, "tx_route")) {
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-dev_id=", (sizeof
+					("-dev_id=") - 1))) {
+					dev_id = atoi(&token[sizeof("-dev_id=")
+									- 1]);
+					token = strtok(NULL, " ");
+					if (!memcmp(token, "-sid=", (sizeof
+							("-sid=") - 1))) {
+						sid = atoi(&token[sizeof
+							("-sid=") - 1]);
+						msm_route_stream
+							(DIR_TX, sid, dev_id, 1);
 					}
 				}
 			} else if (!strcmp(token, "rx_deroute")) {
@@ -323,7 +447,22 @@ int devmgr_devctl_handler()
 						sid = atoi(&token[sizeof
 							("-sid=") - 1]);
 						msm_route_stream
-							(1, sid, dev_id, 0);
+							(DIR_RX, sid, dev_id, 0);
+					}
+				}
+			} else if (!strcmp(token, "tx_deroute")) {
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-dev_id=", (sizeof
+							("-dev_id=") - 1))) {
+					dev_id = atoi(&token[sizeof("-dev_id=")
+									- 1]);
+					token = strtok(NULL, " ");
+					if (!memcmp(token, "-sid=", (sizeof
+							("-sid=") - 1))) {
+						sid = atoi(&token[sizeof
+							("-sid=") - 1]);
+						msm_route_stream
+							(DIR_TX, sid, dev_id, 0);
 					}
 				}
 			} else if (!strcmp(token, "voice_route")) {
@@ -383,8 +522,6 @@ int devmgr_devctl_handler()
 							("-mute=") - 1]);
 					msm_set_voice_tx_mute(mute);
 				}
-			} else if (!strcmp(token, "exit")) {
-				audiotest_deinit_devmgr();
 			} else {
 				printf("%s: Invalid command", __func__);
 				printf("%s\n", devctl_help_text);

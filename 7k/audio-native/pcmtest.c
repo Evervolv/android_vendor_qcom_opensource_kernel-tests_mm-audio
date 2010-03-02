@@ -65,7 +65,7 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 		return -1;
 	}
 #if defined(QC_PROP)
-    if (devmgr_register_session(dec_id) < 0) {
+    if (devmgr_register_session(dec_id, DIR_RX) < 0) {
 		ret = -1;
 		goto exit;
     }
@@ -132,7 +132,7 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 	free(buf);
 err_state:
 #if defined(QC_PROP) && defined(AUDIOV2)
-	if (devmgr_unregister_session(dec_id) < 0)
+	if (devmgr_unregister_session(dec_id, DIR_RX) < 0)
 			ret = -1;
 exit:
 #endif
@@ -322,17 +322,7 @@ int wav_rec(struct audtest_config *config)
 		close(afd);
 		return -1;
 	}
-	device_id = enable_device_tx(device);
-	if (device_id < 0) {
-		close(fd);
-		close(afd);
-		return -1;
-	}
-	printf("device_id = %d\n", device_id);
-	printf("enc_id = %d\n", enc_id);
-	if (msm_route_stream(2, enc_id, device_id, 1)) {
-		perror("\n could not set stream routing\n");
-		disable_device_tx(device_id);
+	if (devmgr_register_session(enc_id, DIR_TX) < 0) {
 		close(fd);
 		close(afd);
 		return -1;
@@ -392,10 +382,9 @@ int wav_rec(struct audtest_config *config)
 	write(fd, &hdr, sizeof(hdr));
 	close(fd);
 #ifdef AUDIOV2
-	if (msm_route_stream(2, enc_id, device_id, 0)) {
-		perror("\n could not re-set stream routing\n");
+	if (devmgr_unregister_session(enc_id, DIR_TX) < 0){
+		perror("could not unregister encode session\n");
 	}
-	disable_device_tx(device_id);
 #endif
 	return 0;
 
@@ -403,10 +392,9 @@ int wav_rec(struct audtest_config *config)
 	close(afd);
 	close(fd);
 #ifdef AUDIOV2
-	if (msm_route_stream(2, enc_id, device_id, 0)) {
-		perror("\n could not re-set stream routing\n");
+	if (devmgr_unregister_session(enc_id, DIR_TX) < 0){
+		perror("could not unregister encode session\n");
 	}
-	disable_device_tx(device_id);
 #endif
 	unlink(config->file_name);
 	return -1;

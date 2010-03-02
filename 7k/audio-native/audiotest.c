@@ -47,10 +47,6 @@ Format of command string is test case specific. Run audio_test -format test_case
 to see the format of command string for the desired test case. \n";
 	 
 char cmdstr[256];
-#ifdef AUDIOV2
-static int enable_device_tx_cnt = 0;
-static int enable_device_rx_cnt = 0;
-#endif
 
 #define AUDIOTEST_MAX_TH_CXT 10 /* Maximum number of thread context */
 struct audiotest_thread_context thread_context[AUDIOTEST_MAX_TH_CXT];
@@ -91,58 +87,6 @@ void free_context(struct audiotest_thread_context *context) {
 	}
 	pthread_mutex_unlock(&audiotest_mutex);
 }
-
-#ifdef AUDIOV2
-int enable_device_tx(const char *device_name)
-{
-	int device_id = 0;
-	device_id = msm_get_device(device_name);
-	printf("device_id = %d\n", device_id);
-	if (msm_en_device(device_id, 1)) {
-		perror("could not enable device\n");
-		return -1;
-	}
-	enable_device_tx_cnt++;
-	return device_id;
-}
-
-int disable_device_tx(int device_id)
-{
-	enable_device_tx_cnt--;
-	if (enable_device_tx_cnt == 0) {
-		if (msm_en_device(device_id, 0)) {
-			perror("could not disable device\n");
-			return -1;
-		}
-	}
-	return 0;
-}
-
-int enable_device_rx(const char *device_name)
-{
-	int device_id = 0;
-	device_id = msm_get_device(device_name);
-	printf("device_id = %d\n", device_id);
-	if (msm_en_device(device_id, 1)) {
-		perror("could not enable device\n");
-		return -1;
-	}
-	enable_device_rx_cnt++;
-	return device_id;
-}
-
-int disable_device_rx(int device_id)
-{
-	enable_device_rx_cnt--;
-	if (enable_device_rx_cnt == 0) {
-		if (msm_en_device(device_id, 0)) {
-			perror("could not disable device\n");
-			return -1;
-		}
-	}
-	return 0;
-}
-#endif
 
 struct audiotest_thread_context* find_context(int id) {
 	unsigned char i;

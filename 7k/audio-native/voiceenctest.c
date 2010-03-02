@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -244,16 +244,9 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		close(afd);
 		return -1;
 	}
-	device_id = enable_device_tx(device);
-	if (device_id < 0) {
-		close(fd);
+
+	if (devmgr_register_session(enc_id, DIR_TX) < 0) {
 		close(afd);
-		return -1;
-	}
-	printf("device_id = %d\n", device_id);
-	printf("enc_id = %d\n", enc_id);
-	if (msm_route_stream(2, enc_id, device_id, 1)) {
-		perror("\n could not set stream routing\n");
 		goto fail;
 	}
 
@@ -410,18 +403,17 @@ done:
 
 	printf("Secondary encoder stopped \n");
 	close(afd);
-	close(fd);
-	if (msm_route_stream(2, enc_id, device_id, 0)) {
-		perror("\n could not re-set stream routing\n");
+
+	if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+		perror("\ncould not unregister recording session\n");
 	}
-	disable_device_tx(device_id);
 	return 0;
 fail:
 	close(afd);
-	if (msm_route_stream(2, enc_id, device_id, 0)) {
-		perror("\n could not re-set stream routing\n");
+
+	if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+		perror("\ncould not unregister recording session\n");
 	}
-	disable_device_tx(device_id);
 device_err:
 	close(fd);
 	unlink(clnt_config->file_name);

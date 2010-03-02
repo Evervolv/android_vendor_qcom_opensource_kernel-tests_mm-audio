@@ -262,7 +262,7 @@ static int wma_start(struct audtest_config *clnt_config)
 			return -1;
 		}
 #if defined(QC_PROP)
-		if (devmgr_register_session(dec_id) < 0) {
+		if (devmgr_register_session(dec_id, DIR_RX) < 0) {
 			ret = -1;
 			goto exit;
 		}
@@ -447,7 +447,7 @@ static int wma_start(struct audtest_config *clnt_config)
 err_state:
 #if defined(QC_PROP) && defined(AUDIOV2)
 	if (!audio_data->mode) {
-		if (devmgr_unregister_session(dec_id) < 0)
+		if (devmgr_unregister_session(dec_id, DIR_RX) < 0)
 			ret = -1;
 	}
 exit:
