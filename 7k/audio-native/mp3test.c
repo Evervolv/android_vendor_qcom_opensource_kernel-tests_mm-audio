@@ -112,6 +112,10 @@ static void *mp3_dec(void *arg)
 
 	lseek(fd, 44, SEEK_SET);	/* Set Space for Wave Header */
 	do {
+		if (audio_data->bitstream_error == 1) {
+			printf("Bitstream error notified, exit read thread\n");
+			break;
+		}
 		if (audio_data->suspend == 1) {
 			printf("enter suspend mode\n");
 			ioctl(afd, AUDIO_STOP, 0);
@@ -228,6 +232,21 @@ static void *event_notify(void *arg)
 					audio_data->outport_flush_enable = 0;
 				}
 				#endif
+			} else if
+			(suspend_event.event_type ==
+				AUDIO_EVENT_BITSTREAM_ERROR_INFO) {
+				printf("event_notify: BITSTREAM ERROR EVENT \
+					FROM DRIVER:%d\n",
+					suspend_event.event_type);
+				printf("BITSTREAM ERROR:\n codec_type : %d\n \
+					error_count : %d\n error_type : %d\n",
+					 suspend_event.event_payload.error_info.dec_id,
+					 (0x0000FFFF &
+					suspend_event.event_payload.error_info.err_msg_indicator),
+					 suspend_event.event_payload.error_info.err_type);
+				#ifdef AUDIOV2
+				audio_data->bitstream_error = 1;
+				#endif
 			}
 		}
 	} while (1);
@@ -291,8 +310,17 @@ static int initiate_play(struct audtest_config *clnt_config,
 		goto err_state;
 	}
 
-	if (audio_data->mode)
+	if (audio_data->mode) {
 		config.meta_field = 1;
+		#ifdef AUDIOV2
+		if (ioctl(afd, AUDIO_SET_ERR_THRESHOLD_VALUE, &audio_data->err_threshold_value)) {
+			perror("could not set error threshold value");
+			ret = -1;
+			goto err_state;
+		}
+		#endif
+	}
+
 	config.sample_rate = clnt_config->sample_rate;
 	printf(" in initate_play, sample_rate=%d\n", config.sample_rate);
 	if (ioctl(afd, AUDIO_SET_CONFIG, &config)) {
@@ -368,13 +396,16 @@ static int initiate_play(struct audtest_config *clnt_config,
 
 	fprintf(stderr,"start playback\n");
 	if (ioctl(afd, AUDIO_START, 0) >= 0) {
-		for (;;) {
+		for (;audio_data->bitstream_error != 1;) {
 #if 0
 			if (ioctl(afd, AUDIO_GET_STATS, &stats) == 0)
 				fprintf(stderr,"%10d\n", stats.out_bytes);
 #endif
-			if (((sz = fill(buf, config.buffer_size, cookie)) < 0)||audio_data->quit) {
+			if (((sz = fill(buf, config.buffer_size, cookie)) < 0) ||
+				audio_data->quit || audio_data->bitstream_error) {
 				printf(" File reached end or quit cmd issued, exit loop \n");
+				if(audio_data->bitstream_error == 1)
+					break;
 				if (audio_data->mode) {
 					struct meta_in meta;
 					meta.offset =
@@ -595,6 +626,8 @@ int mp3play_read_params(void) {
 			#else
 				audio_data->outfile = "/tmp/pcm.wav";
 			#endif
+			audio_data->err_threshold_value = 1;
+			audio_data->bitstream_error = 0;
 			context->config.sample_rate = 44100;
 			context->config.channel_mode = 2;
 			context->config.file_name = "/data/data.mp3";
@@ -617,6 +650,10 @@ int mp3play_read_params(void) {
 				} else if (!memcmp(token, "-out=",
 					(sizeof("-out=") - 1))) {
 					audio_data->outfile = token + (sizeof("-out=")-1);
+				} else if (!memcmp(token, "-err_thr=",
+					(sizeof("-err_thr=") - 1))) {
+					audio_data->err_threshold_value =
+						atoi(&token[sizeof("-err_thr=") - 1]);
 				} else {
 					context->config.file_name = token;
 				}
@@ -667,10 +704,11 @@ int mp3_play_control_handler(void* private_data) {
 const char *mp3play_help_txt = 
 	"Play mp3 file: type \n \
 echo \"playmp3 path_of_file -rate=sample_rate -id=xxx \
--mode=x -cmode=x -out=path_of_outfile\" > %s \n\
+-mode=x -cmode=x -err_thr=x -out=path_of_outfile\" > %s \n\
 Sample rate of MP3 file <= 48000 \n\
 Channel mode 1 or 2 \n \
 mode= 0(tunnel mode) or 1 (non-tunnel mode) \n\
+Error threshold value 0 to 0x7fff \n \
 Supported control command : pause, resume, flush, quit\n ";
 
 void mp3play_help_menu(void) {

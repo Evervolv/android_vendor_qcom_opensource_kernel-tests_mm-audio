@@ -90,7 +90,8 @@ struct audio_pvt_data {
   int start_ptr;
   int suspend;
   int frame_count;
-  int quit;	
+  int quit;
+  int bitstream_error;
   unsigned avail;
   unsigned org_avail;
   int datareqthr;
@@ -104,6 +105,7 @@ struct audio_pvt_data {
   char *org_next;
   const char *outfile;
   int outport_flush_enable;
+  uint32_t err_threshold_value;
   int formattag;	/* WMAPRO specific parameters */
   int channelmask;
   int bitspersample;
