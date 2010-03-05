@@ -103,6 +103,7 @@ struct audio_pvt_data {
   char *next;
   char *org_next;
   const char *outfile;
+  int outport_flush_enable;
   int formattag;	/* WMAPRO specific parameters */
   int channelmask;
   int bitspersample;
