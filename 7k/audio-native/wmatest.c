@@ -555,7 +555,7 @@ int wmaplay_read_params(void)
 int wma_play_control_handler(void *private_data)
 {
 	int drvfd, ret_val = 0;
-	int volume = 8192;	/* Default volume */
+	int volume;	/* Default volume */
 	char *token;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) private_data;
 
@@ -571,15 +571,33 @@ int wma_play_control_handler(void *private_data)
 				ioctl(drvfd, AUDIO_PAUSE, 1);
 			} else if (!strcmp(token, "resume")) {
 				ioctl(drvfd, AUDIO_PAUSE, 0);
+#if defined(QC_PROP) && defined(AUDIOV2)
+			} else if (!strcmp(token, "volume")) {
+				int rc;
+				unsigned short dec_id;
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-value=",
+					(sizeof("-value=") - 1))) {
+					volume = atoi(&token[sizeof("-value=") - 1]);
+					if (ioctl(drvfd, AUDIO_GET_SESSION_ID, &dec_id)) {
+						perror("could not get decoder session id\n");
+					} else {
+						printf("session %d - volume %d \n", dec_id, volume);
+						rc = msm_set_volume(dec_id, volume);
+						printf("session volume result %d\n", rc);
+					}
+				}
+#else
 			} else if (!strcmp(token, "volume")) {
 				token = strtok(NULL, " ");
 				if (!memcmp(token, "-value=",
-					    (sizeof("-value=") - 1))) {
+					(sizeof("-value=") - 1))) {
 					volume =
-					    atoi(&token[sizeof("-value=") - 1]);
+					atoi(&token[sizeof("-value=") - 1]);
+					ioctl(drvfd, AUDIO_SET_VOLUME, volume);
+					printf("volume:%d\n", volume);
 				}
-				ioctl(drvfd, AUDIO_SET_VOLUME, volume);
-				printf("volume:%d\n", volume);
+#endif
 			} else if (!strcmp(token, "flush")) {
 				audio_data->flush_enable = 1;
 				ioctl(drvfd, AUDIO_FLUSH, 0);

@@ -495,16 +495,40 @@ int pcmrec_read_params(void) {
 }
 
 int pcm_play_control_handler(void* private_data) {
-	int /* drvfd ,*/ ret_val = 0;
+	int  drvfd , ret_val = 0;
 	char *token;
+#if defined(QC_PROP) && defined(AUDIOV2)
+	int volume;
+#endif
 
 	token = strtok(NULL, " ");
 	if ((private_data != NULL) && 
 		(token != NULL)) {
-		/* drvfd = (int) private_data */
+		drvfd = (int) private_data;
 		if(!memcmp(token,"-cmd=", (sizeof("-cmd=") -1))) {
+#if defined(QC_PROP) && defined(AUDIOV2)
+                       token = &token[sizeof("-cmd=") - 1];
+                       printf("%s: cmd %s\n", __FUNCTION__, token);
+                       if (!strcmp(token, "volume")) {
+                               int rc;
+                               unsigned short dec_id;
+                               token = strtok(NULL, " ");
+                               if (!memcmp(token, "-value=",
+                                       (sizeof("-value=") - 1))) {
+                                       volume = atoi(&token[sizeof("-value=") - 1]);
+                                       if (ioctl(drvfd, AUDIO_GET_SESSION_ID, &dec_id)) {
+                                               perror("could not get decoder session id\n");
+                                       } else {
+                                               printf("session %d - volume %d \n", dec_id, volume);
+                                               rc = msm_set_volume(dec_id, volume);
+                                               printf("session volume result %d\n", rc);
+                                       }
+                               }
+                       }
+#else
 			token = &token[sizeof("-id=") - 1];
 			printf("%s: cmd %s\n", __FUNCTION__, token);
+#endif
 		}
 	} else {
 		ret_val = -1;
@@ -540,7 +564,7 @@ const char *pcmplay_help_txt =
 echo \"playpcm path_of_file -id=xxx -dev=/dev/msm_pcm_dec or msm_pcm_out\" > tmp/audio_test \n\
 Sample rate of PCM file <= 48000 \n\
 Bits per sample = 16 bits \n\
-Supported control command: pause, flush \n ";
+Supported control command: pause, flush, volume\n ";
 
 void pcmplay_help_menu(void) {
 	printf("%s\n", pcmplay_help_txt);
