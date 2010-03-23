@@ -621,48 +621,59 @@ static int initiate_play(struct audtest_config *clnt_config,
 				fprintf(stderr,"%10d\n", stats.out_bytes);
 #endif
 			if (((sz = fill(buf, config.buffer_size,
-				cookie)) < 0) || audio_data->quit ||
+				cookie)) < 0) || (audio_data->quit == 1) ||
 				audio_data->bitstream_error) {
-				printf(" File reached end or quit issued, exit loop \n");
 				if (audio_data->bitstream_error == 1)
 					break;
-				if (audio_data->mode) {
-					struct meta_in meta;
-					meta.offset =
-						sizeof(struct meta_in);
-					meta.ntimestamp.LowPart =
-					((audio_data->frame_count * 20000) & 0xFFFFFFFF);
-					meta.ntimestamp.HighPart =
-					(((unsigned long long)(audio_data->frame_count
-					* 20000) >> 32) & 0xFFFFFFFF);
-					meta.nflags = EOS;
-					#ifdef DEBUG_LOCAL
-					printf("Meta In High part is %lu\n",
-						meta.ntimestamp.HighPart);
-					printf("Meta In Low part is %lu\n",
-						meta.ntimestamp.LowPart);
-					printf("Meta In ntimestamp: %llu\n",
-					((meta.ntimestamp.HighPart << 32)
-					 + meta.ntimestamp.LowPart));
-					#endif
-					memset(buf, 0,
-					sizeof(config.buffer_size));
-					memcpy(buf, &meta,
-						sizeof(struct meta_in));
-					if (write(afd, buf,
-					sizeof(struct meta_in)) < 0)
-						printf(" writing buffer\
-						for EOS failed\n");
-				} else {
-					printf("FSYNC: Reached end of \
-						file, calling fsync\n");
-					while (fsync(afd) < 0) {
-						printf("fsync \
-							failed\n");
-						sleep(1);
+				if ((audio_data->repeat == 0) || (audio_data->quit == 1)) {
+					printf(" File reached end or quit issued, exit loop \n");
+					if (audio_data->mode) {
+						struct meta_in meta;
+						meta.offset =
+							sizeof(struct meta_in);
+						meta.ntimestamp.LowPart =
+						((audio_data->frame_count * 20000) & 0xFFFFFFFF);
+						meta.ntimestamp.HighPart =
+						(((unsigned long long)(audio_data->frame_count
+						* 20000) >> 32) & 0xFFFFFFFF);
+						meta.nflags = EOS;
+						#ifdef DEBUG_LOCAL
+						printf("Meta In High part is %lu\n",
+							meta.ntimestamp.HighPart);
+						printf("Meta In Low part is %lu\n",
+							meta.ntimestamp.LowPart);
+						printf("Meta In ntimestamp: %llu\n",
+						((meta.ntimestamp.HighPart << 32)
+						 + meta.ntimestamp.LowPart));
+						#endif
+						memset(buf, 0,
+						sizeof(config.buffer_size));
+						memcpy(buf, &meta,
+							sizeof(struct meta_in));
+						if (write(afd, buf,
+						sizeof(struct meta_in)) < 0)
+							printf(" writing buffer\
+							for EOS failed\n");
+					} else {
+						printf("FSYNC: Reached end of \
+							file, calling fsync\n");
+						while (fsync(afd) < 0) {
+							printf("fsync \
+								failed\n");
+							sleep(1);
+						}
 					}
+					break;
+				} else {
+					printf("\nRepeat playback\n");
+					audio_data->avail = audio_data->org_avail;
+					audio_data->next  = audio_data->org_next;
+					cntW = 0;
+					if(audio_data->repeat > 0)
+						audio_data->repeat--;
+					sleep(1);
+					continue;
 				}
-				break;
 			}
 			if (audio_data->suspend == 1) {
 				printf("enter suspend mode\n");
@@ -687,7 +698,8 @@ static int initiate_play(struct audtest_config *clnt_config,
 				break;
 			} else {
 				cntW++;
-				printf(" aac_play: instance=%d cntW=%d\n", (int) audio_data, cntW);
+				printf(" aac_play: instance=%d repeat_cont=%d cntW=%d\n",
+						(int) audio_data, audio_data->repeat, cntW);
 			}
 		}
 		printf("end of aac play\n");
@@ -843,6 +855,8 @@ int aacplay_read_params(void) {
                         #endif
 			audio_data->err_threshold_value = 1;
 			audio_data->bitstream_error = 0;
+			audio_data->repeat = 0;
+			audio_data->quit = 0;
 			context->config.file_name = "/data/data.aac";
 			memset(&context->config.fmt_config, 0, 
 				   sizeof(context->config.fmt_config));
@@ -924,6 +938,13 @@ int aacplay_read_params(void) {
 					(sizeof("-err_thr=") - 1))) {
 					audio_data->err_threshold_value =
 						atoi(&token[sizeof("-err_thr=") - 1]);
+				} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+					audio_data->repeat = atoi(&token[sizeof("-repeat=") - 1]);
+					if (audio_data->repeat == 0)
+						audio_data->repeat = -1;
+					else
+						audio_data->repeat--;
                                 } else {
 					context->config.file_name = token;
 				}
@@ -1237,7 +1258,7 @@ int aac_rec_control_handler(void* private_data) {
 
 const char *aacplay_help_txt =
 "Play aac file: type \n \
-echo \"playaac path_of_file -type=xxxx -rate=xxxx -cmode=x \
+echo \"playaac path_of_file -type=xxxx -repeat=x -rate=xxxx -cmode=x \
 -profile=xxx -id=xxx -mode=x -bitstream=xxx -err_thr=x \
 -out=path_of_outfile\" > %s \n \
 Sample rate of AAC file <= 48000 \n \
@@ -1249,6 +1270,7 @@ Profile aac, aac+, eaac+ \n \
 Mode 1 (Non-Tunneled) and 0 (Tunneled) \n \
 Bitstream lc, ltp, erlc or bsac \n \
 Error threshold value 0 to 0x7fff \n \
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Supported control command: pause, resume, flush, volume, quit\n ";
 
 void aacplay_help_menu(void) {

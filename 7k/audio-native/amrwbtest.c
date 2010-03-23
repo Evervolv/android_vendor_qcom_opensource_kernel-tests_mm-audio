@@ -322,36 +322,47 @@ static int initiate_play(struct audtest_config *clnt_config,
 		for (;;) {
 			if (sz == 0) {
 				if (((sz = fill(buf, config.buffer_size,
-					cookie)) < 0) || audio_data->quit) {
-					printf("File reached end or quit \
-						cmd issued, exit loop \n");
-					if (audio_data->mode) {
-						struct meta_in meta;
-						meta.offset =
-							sizeof(struct meta_in);
-						meta.timestamp =
-						(audio_data->frame_count *
-						 20000);
-						meta.nflags = 1;
-						memset(buf, 0,
-						sizeof(config.buffer_size) +
-						sizeof(struct meta_in));
-						memcpy(buf, &meta,
+					cookie)) < 0) || (audio_data->quit == 1)) {
+					if ((audio_data->repeat == 0) || (audio_data->quit == 1)) {
+						printf("File reached end or quit \
+							cmd issued, exit loop \n");
+						if (audio_data->mode) {
+							struct meta_in meta;
+							meta.offset =
+								sizeof(struct meta_in);
+							meta.timestamp =
+							(audio_data->frame_count *
+							 20000);
+							meta.nflags = 1;
+							memset(buf, 0,
+							sizeof(config.buffer_size) +
 							sizeof(struct meta_in));
-						if (write(afd, buf,
-						sizeof(struct meta_in)) < 0)
-							printf("writing buffer\
-							for EOS failed\n");
+							memcpy(buf, &meta,
+								sizeof(struct meta_in));
+							if (write(afd, buf,
+							sizeof(struct meta_in)) < 0)
+								printf("writing buffer\
+								for EOS failed\n");
+						} else {
+							printf("FSYNC: Reached end of \
+								file, calling fsync\n");
+							if (fsync(afd) < 0)
+								printf("fsync \
+									failed\n");
+						}
+						printf("fill return NON NULL, \
+								exit loop \n");
+						break;
 					} else {
-						printf("FSYNC: Reached end of \
-							file, calling fsync\n");
-						if (fsync(afd) < 0)
-							printf("fsync \
-								failed\n");
+						printf("\nRepeat playback\n");
+						audio_data->avail = audio_data->org_avail;
+						audio_data->next  = audio_data->org_next;
+						cntW = 0;
+						if(audio_data->repeat > 0)
+							audio_data->repeat--;
+						sleep(1);
+						continue;
 					}
-					printf("fill return NON NULL, \
-							exit loop \n");
-					break;
 				}
 			} else
 				printf("amrwb_play: continue with unconsumed \
@@ -366,7 +377,8 @@ static int initiate_play(struct audtest_config *clnt_config,
 				printf("exit suspend mode\n");
 			}
 			used = write(afd, buf, sz);
-			printf(" amrwb_play: cntW=%d\n", cntW);
+			printf(" amrwb_play: instance=%d repeat_cont=%d cntW=%d\n",
+					(int) audio_data, audio_data->repeat, cntW);
 			if (used > -1) {
 				sz -= used;
 				cntW++;
@@ -523,6 +535,8 @@ int amrwbplay_read_params(void)
 			#else
 			audio_data->outfile = "/tmp/pcm.wav";
 			#endif
+			audio_data->repeat = 0;
+			audio_data->quit = 0;
 			context->config.sample_rate = 44100;
 			context->config.channel_mode = 2;
 			context->config.file_name = "/data/data.amr";
@@ -550,6 +564,13 @@ int amrwbplay_read_params(void)
 						(sizeof("-out=") - 1))) {
 					audio_data->outfile = token +
 							(sizeof("-out=")-1);
+				} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+					audio_data->repeat = atoi(&token[sizeof("-repeat=") - 1]);
+					if (audio_data->repeat == 0)
+						audio_data->repeat = -1;
+					else
+						audio_data->repeat--;
 				} else {
 					context->config.file_name = token;
 				}
@@ -617,6 +638,9 @@ int amrwb_play_control_handler(void *private_data)
 				audio_data->next  = audio_data->org_next;
 				ioctl(drvfd, AUDIO_FLUSH, 0);
 				printf("flush\n");
+			} else if (!strcmp(token, "quit")) {
+				audio_data->quit = 1;
+				printf("quit session\n");
 			}
 		}
 	} else {
@@ -630,9 +654,10 @@ int amrwb_play_control_handler(void *private_data)
 const char *amrwbplay_help_txt =
 "Play amrwb file: type \n\
 echo \"playamrwb path_of_file -id=xxx -mode=x -cmode=x\
- -out=<filename>\" > %s \n\
+ -out=<filename> -repeat=x \" > %s \n\
 mode= 0(tunnel mode) or 1 (non-tunnel mode) \n\
 cmode= 0(mono) or 1 (stereo) \n\
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Supported control command: pause, resume, volume, flush, quit\n ";
 
 void amrwbplay_help_menu(void)

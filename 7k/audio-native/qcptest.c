@@ -489,89 +489,103 @@ static int qcp_start(struct audtest_config *clnt_config)
 	printf("Data chunk size = %d\n", data.s_data);
 
 	if (qcpheader->fmt.info.vr_num_of_rates) {	/* Variable rate */
-		for (ii = 0, jj = 0, count = 0; ii < data.s_data && !audio_data->quit;
-		     ii = ii + inc + 1) {
-			int bytetrace;
+		for (ii = 0, jj = 0, count = 0; ; ii = ii + inc + 1) {
+			if ((ii < data.s_data) && (audio_data->quit != 1)) {
+				int bytetrace;
 
-			if (audio_data->mode) {
-				bytetrace = (jj * pkts_size) + 1 +
-					sizeof(struct meta_in);
-				if (jj == 0) {
-					meta.offset = sizeof(struct meta_in);
-					meta.timestamp = (audio_data->frame_count * 20000);
-					meta.nflags = 0;
-					#ifdef DEBUG_LOCAL
-					printf("Meta In timestamp: %lld\n",
+				if (audio_data->mode) {
+					bytetrace = (jj * pkts_size) + 1 +
+						sizeof(struct meta_in);
+					if (jj == 0) {
+						meta.offset = sizeof(struct meta_in);
+						meta.timestamp = (audio_data->frame_count * 20000);
+						meta.nflags = 0;
+						#ifdef DEBUG_LOCAL
+						printf("Meta In timestamp: %lld\n",
 							meta.timestamp);
-					#endif
-					memcpy(transcodebuf, &meta,
-							sizeof(struct meta_in));
-				}
-			} else
-				bytetrace = (jj * pkts_size) + 1;
+						#endif
+						memcpy(transcodebuf, &meta,
+								sizeof(struct meta_in));
+					}
+				} else
+					bytetrace = (jj * pkts_size) + 1;
 
-			read(fd, &transcodebuf[bytetrace], 1);
-			for (rate = 0;
-			     rate < qcpheader->fmt.info.vr_num_of_rates;
-			     rate++) {
-				if (transcodebuf[bytetrace] == ts[rate].rate) {
-					inc = ts[rate].size;
+				read(fd, &transcodebuf[bytetrace], 1);
+				for (rate = 0;
+				     rate < qcpheader->fmt.info.vr_num_of_rates;
+				     rate++) {
+					if (transcodebuf[bytetrace] == ts[rate].rate) {
+						inc = ts[rate].size;
+						break;
+					}
+				}
+				if (rate == qcpheader->fmt.info.vr_num_of_rates) {
+					printf("Unknown Rate\n");
 					break;
 				}
-			}
-			if (rate == qcpheader->fmt.info.vr_num_of_rates) {
-				printf("Unknown Rate\n");
-				break;
-			}
-			if (audio_data->mode)
-				bytetrace = (jj * pkts_size) + 2 +
-					sizeof(struct meta_in);
-			else
-				bytetrace = (jj * pkts_size) + 2;
+				if (audio_data->mode)
+					bytetrace = (jj * pkts_size) + 2 +
+						sizeof(struct meta_in);
+				else
+					bytetrace = (jj * pkts_size) + 2;
 
-			read(fd, &transcodebuf[bytetrace], inc);
-			count++;
-			jj++;
-			if (jj == pkts_per_buffer) {
-				#ifdef DEBUG_LOCAL
-				printf("writing %d no of packets\n", jj);
-				printf("Data1 %d =  %d, Data2 %d = %d \n",
-				       transcodebuf[0], &transcodebuf[0],
-				       transcodebuf[1], &transcodebuf[1]);
-				#endif
-				 audio_data->frame_count += jj;
-				jj = 0;
-				if (audio_data->suspend == 1) {
-					printf("enter suspend mode\n");
-					ioctl(afd, AUDIO_STOP, 0);
-					while (audio_data->suspend == 1)
-						sleep(1);
-					ioctl(afd, AUDIO_START, 0);
-					printf("exit suspend mode\n");
-				}
-				ret =
-				    write(afd, &transcodebuf[0], size);
-				if( (ret < 0) && (audio_data->flush_enable == 1) ) {
-					printf("Flush in progress \n");
-					usleep(5000);
-					printf("start_ptr = %d\n", audio_data->start_ptr);
-					ii = 0;
+				read(fd, &transcodebuf[bytetrace], inc);
+				count++;
+				jj++;
+				if (jj == pkts_per_buffer) {
+					#ifdef DEBUG_LOCAL
+					printf("writing %d no of packets\n", jj);
+					printf("Data1 %d =  %d, Data2 %d = %d \n",
+					       transcodebuf[0], &transcodebuf[0],
+					       transcodebuf[1], &transcodebuf[1]);
+					#endif
+					 audio_data->frame_count += jj;
 					jj = 0;
-					/* Set to start of data portion */
-					lseek(fd, audio_data->start_ptr, SEEK_SET);
+					if (audio_data->suspend == 1) {
+						printf("enter suspend mode\n");
+						ioctl(afd, AUDIO_STOP, 0);
+						while (audio_data->suspend == 1)
+							sleep(1);
+						ioctl(afd, AUDIO_START, 0);
+						printf("exit suspend mode\n");
+					}
+					ret =
+					    write(afd, &transcodebuf[0], size);
+					if( (ret < 0) && (audio_data->flush_enable == 1) ) {
+						printf("Flush in progress \n");
+						usleep(5000);
+						printf("start_ptr = %d\n", audio_data->start_ptr);
+						ii = 0;
+						jj = 0;
+						/* Set to start of data portion */
+						lseek(fd, audio_data->start_ptr, SEEK_SET);
+					}
+					#ifdef DEBUG_LOCAL
+					printf("ret = %d\n", ret);
+					#endif
+					if (count == pkts_per_buffer * 2)
+						ioctl(afd, AUDIO_START, 0);
 				}
-				#ifdef DEBUG_LOCAL
-				printf("ret = %d\n", ret);
-				#endif
-				if (count == pkts_per_buffer * 2)
-					ioctl(afd, AUDIO_START, 0);
-			}
+			} else if ((ii >= data.s_data) && (audio_data->repeat != 0)
+					&& (audio_data->quit != 1)) {
+				printf("\nRepeat playback\n");
+				ii = 0;
+				jj = 0;
+				/* Set to start of data portion */
+				lseek(fd, audio_data->start_ptr, SEEK_SET);
+				if(audio_data->repeat > 0)
+					audio_data->repeat--;
+				sleep(1);
+				continue;
+			} else if (((ii >= data.s_data) && (audio_data->repeat == 0))
+					|| (audio_data->quit == 1))
+				break;
 		}
 	} else {		/* Fixed rate */
 		printf("I am reading Fixed rate encoded data\n");
-		for (ii = 0, jj = 0, count = 0;
-		     ii < data.s_data && !audio_data->quit;
-		     ii = ii + qcpheader->fmt.info.bytes_per_pkt) {
+		for (ii = 0, jj = 0, count = 0; ;
+				ii = ii + qcpheader->fmt.info.bytes_per_pkt) {
+		if ((ii < data.s_data) && (audio_data->quit != 1)) {
 			int bytetrace;
 
 			if (audio_data->mode) {
@@ -626,6 +640,20 @@ static int qcp_start(struct audtest_config *clnt_config)
 				if (count == pkts_per_buffer * 2)
 					ioctl(afd, AUDIO_START, 0);
 			}
+		} else if ((ii >= data.s_data) && (audio_data->repeat != 0)
+				&& (audio_data->quit != 1)) {
+			printf("\nRepeat playback\n");
+			ii = 0;
+			jj = 0;
+			/* Set to start of data portion */
+			lseek(fd, audio_data->start_ptr, SEEK_SET);
+			if(audio_data->repeat > 0)
+				audio_data->repeat--;
+			sleep(1);
+			continue;
+		} else if (((ii >= data.s_data) && (audio_data->repeat == 0))
+				|| (audio_data->quit == 1))
+			break;
 		}
 	}
 
@@ -723,6 +751,8 @@ int qcpplay_read_params(void)
 		#else
 			audio_data->outfile = "/tmp/pcm.wav";
 		#endif
+			audio_data->repeat = 0;
+			audio_data->quit = 0;
 			token = strtok(NULL, " ");
 			while (token != NULL) {
 				if (!memcmp(token, "-id=", (sizeof("-id=") - 1))) {
@@ -734,6 +764,13 @@ int qcpplay_read_params(void)
 				} else if (!memcmp(token, "-out=",
 						(sizeof("-out=") - 1))) {
 					audio_data->outfile = token + (sizeof("-out=")-1);
+				} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+					audio_data->repeat = atoi(&token[sizeof("-repeat=") - 1]);
+					if (audio_data->repeat == 0)
+						audio_data->repeat = -1;
+					else
+						audio_data->repeat--;
 				} else {
 					context->config.file_name = token;
 				}
@@ -816,9 +853,10 @@ int qcp_play_control_handler(void *private_data)
 
 const char *qcpplay_help_txt = "Play QCP file: type \n\
 echo \"playqcp path_of_file -id=xxx -mode=x \
--out=path_of_outfile\" > %s \n\
+-out=path_of_outfile -repeat=x\" > %s \n\
 Codec type of QCP file: Qcelp 13K or EVRC \n\
 mode= 0(tunnel mode) or 1 (non-tunnel mode) \n\
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Supported control command: pause, resume, volume, flush, quit \n\
 examples: \n\
 echo \"playqcp path_of_file -id=xxx -mode=<0 or 1>\" > %s \n\

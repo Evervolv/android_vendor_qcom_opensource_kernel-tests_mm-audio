@@ -328,31 +328,43 @@ static int initiate_play(struct audtest_config *clnt_config,
 				fprintf(stderr,"%10d\n", stats.out_bytes);
 #endif
 			if (sz == 0) {
-				if (((sz = fill(buf, config.buffer_size, cookie)) < 0) || audio_data->quit) {
-					printf(" file reached end or quit cmd issued, exit loop \n");
-					if (audio_data->mode) {
-						struct meta_in meta;
-						meta.offset =
-							sizeof(struct meta_in);
-						meta.timestamp =
-							(audio_data->frame_count * 20000);
-						meta.nflags = 1;
-						memset(buf, 0,
-						sizeof(config.buffer_size));
-						memcpy(buf, &meta,
-							sizeof(struct meta_in));
-						if (write(afd, buf,
-						sizeof(struct meta_in)) < 0)
-							printf(" writing buffer\
-							for EOS failed\n");
-					} else {
-						printf("FSYNC: Reached end of \
-							file, calling fsync\n");
-						if (fsync(afd) < 0)
-							printf("fsync \
+				if (((sz = fill(buf, config.buffer_size,
+					cookie)) < 0) || (audio_data->quit == 1)) {
+					if ((audio_data->repeat == 0) || (audio_data->quit == 1)) {
+						printf(" file reached end or quit cmd issued, exit loop \n");
+						if (audio_data->mode) {
+							struct meta_in meta;
+							meta.offset =
+								sizeof(struct meta_in);
+							meta.timestamp =
+								(audio_data->frame_count * 20000);
+							meta.nflags = 1;
+							memset(buf, 0,
+							sizeof(config.buffer_size));
+							memcpy(buf, &meta,
+								sizeof(struct meta_in));
+							if (write(afd, buf,
+							sizeof(struct meta_in)) < 0)
+								printf(" writing buffer\
+								for EOS failed\n");
+						} else {
+							printf("FSYNC: Reached end of \
+								file, calling fsync\n");
+							if (fsync(afd) < 0)
+								printf("fsync \
 								failed\n");
+						}
+						break;
+					} else {
+						printf("\nRepeat playback\n");
+						audio_data->avail = audio_data->org_avail;
+						audio_data->next  = audio_data->org_next;
+						cntW = 0;
+						if(audio_data->repeat > 0)
+							audio_data->repeat--;
+						sleep(1);
+						continue;
 					}
-					break;
 				}
 			} else
 				printf("amrnb_play: continue with unconsumed data\n");
@@ -366,7 +378,8 @@ static int initiate_play(struct audtest_config *clnt_config,
 				printf("exit suspend mode\n");
 			}
 			used = write(afd, buf, sz);
-			printf(" amrnb_play: instance=%d cntW=%d\n",(int) audio_data, cntW);
+			printf(" amrnb_play: instance=%d repeat_cont=%d cntW=%d\n",
+					(int) audio_data, audio_data->repeat, cntW);
 			if (used > -1) {
 				sz-=used;
 				cntW++;
@@ -637,6 +650,8 @@ int amrnbplay_read_params(void) {
                         #else
                         audio_data->outfile = "/tmp/pcm.wav";
                         #endif
+			audio_data->repeat = 0;
+			audio_data->quit = 0;
 			context->config.file_name = "/data/data.amr"; 
 			context->type = AUDIOTEST_TEST_MOD_AMRNB_DEC;
 			audio_data->mode = 0;
@@ -651,6 +666,13 @@ int amrnbplay_read_params(void) {
 				} else if (!memcmp(token, "-out=",
                                         (sizeof("-out=") - 1))) {
                                         audio_data->outfile = token + (sizeof("-out=")-1);
+				} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+					audio_data->repeat = atoi(&token[sizeof("-repeat=") - 1]);
+					if (audio_data->repeat == 0)
+						audio_data->repeat = -1;
+					else
+						audio_data->repeat--;
                                 } else {
 					context->config.file_name = token;
 				}   
@@ -791,8 +813,9 @@ void amrnbplay_help_menu(void) {
 const char *amrnbrec_help_txt =
 "Record amrnb: type \n\
 echo \"recamrnb path_of_file -rate=yyyy -dtx=zz -id=xxx\" > %s \n\
-dtx= 0(off) or 65535(on) \n\
+dtx= 0(off) or 65535(on) -repeat=x \n\
 rate= 0(MR475),1(MR515),2(MR59),3(MR67),4(MR74),5(MR795),6(MR102),7(MR122) \n\
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Supported control command: N/A \n ";
 
 void amrnbrec_help_menu(void) {
