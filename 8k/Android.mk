@@ -1,5 +1,5 @@
 #--------------------------------------------------------------------------
-#Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+#Copyright (c) 2010, Code Aurora Forum. All rights reserved.
 
 #Redistribution and use in source and binary forms, with or without
 #modification, are permitted provided that the following conditions are met:
@@ -25,14 +25,9 @@
 #OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 #ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #--------------------------------------------------------------------------
+ifeq ($(TARGET_ARCH),arm)
 
-AUDIO_PATH := $(call my-dir)
-include $(CLEAR_VARS)
+8k_AUDIO_PATH:= $(call my-dir)
+include $(8k_AUDIO_PATH)/audio-native/Android.mk
 
-ifeq ($(TARGET_BOARD_PLATFORM), msm7k)
-    include $(AUDIO_PATH)/7k/Android.mk
-endif
-
-ifeq ($(TARGET_BOARD_PLATFORM), qsd8k)
-    include $(AUDIO_PATH)/8k/Android.mk
 endif
