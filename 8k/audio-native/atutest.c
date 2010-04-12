@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include<unistd.h>
 #include<string.h>
+#include <errno.h>
 #include <linux/msm_audio.h>
 #include "audiotest_def.h"
 #if defined(QC_PROP)
@@ -45,8 +46,8 @@ enum atu_status{
 #define atu_set_device(device) (-EPERM)
 #define atu_set_rx_volume(rx_vol) (-EPERM)
 #define atu_set_tx_volume(rx_vol) (-EPERM)
-#define atu_start_sound_id(sound_id, repeat_cnt, tone_path, cb_ptr, *client_data) (-EPERM)
-#define atu_start_dtmf(f_hi_hz, f_low_hz, tone_duration_ms, tone_path, cb_ptr, *client_data) (-EPERM)
+#define atu_start_sound_id(sound_id, repeat_cnt, tone_path, cb_ptr, client_data) (-EPERM)
+#define atu_start_dtmf(f_hi_hz, f_low_hz, tone_duration_ms, tone_path, cb_ptr, client_data) (-EPERM)
 #define atu_stop() (-EPERM)
 #define atu_init() (-EPERM)
 #define atu_dinit() (-EPERM)
