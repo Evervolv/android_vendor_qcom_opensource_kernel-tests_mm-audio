@@ -227,7 +227,7 @@ void audiotest_cmd_svr(void) {
 			read_count = read(fd, cmdstr, 255);
 			if (read_count == 0) {
 				/* end of stream */
-				sleep(2);
+				usleep(500000);
 			} else if (read_count < 0) {
 				fprintf(stderr, "audio_test: error reading cmd\n");
 				break;
