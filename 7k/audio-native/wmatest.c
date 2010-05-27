@@ -363,49 +363,64 @@ static int wma_start(struct audtest_config *clnt_config)
 	else
 		pkts_size = config.buffer_size;
 
-	for (ii = 0, count = 0; ii < size && !audio_data->quit; ii = ii + pkts_size) {
-		if (audio_data->mode) {
-			struct meta_in meta;
-			meta.ntimestamp.LowPart = ((audio_data->frame_count * 20000) & 0xFFFFFFFF);
-			meta.ntimestamp.HighPart = (((unsigned long long)(audio_data->frame_count
-							* 20000) >> 32) & 0xFFFFFFFF);
-			meta.offset = sizeof(struct meta_in);
-			meta.nflags = 0;
-			audio_data->frame_count++;
-			#ifdef DEBUG_LOCAL
-			printf("Meta In High part is %lu\n",
-					meta.ntimestamp.HighPart);
-			printf("Meta In Low part is %lu\n",
-					meta.ntimestamp.LowPart);
-			printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
-						(meta.ntimestamp.HighPart << 32) +
-						meta.ntimestamp.LowPart));
-			#endif
-			memcpy(transcodebuf, &meta, sizeof(struct meta_in));
-			read(fd, (transcodebuf + sizeof(struct meta_in)), pkts_size);
-		} else
-			read(fd, transcodebuf, pkts_size);
-		count++;
-		printf("writing %d no of packets\n", count);
-		if (audio_data->suspend == 1) {
-			printf("enter suspend mode\n");
-			ioctl(afd, AUDIO_STOP, 0);
-			while (audio_data->suspend == 1)
-				sleep(1);
-			ioctl(afd, AUDIO_START, 0);
-			printf("exit suspend mode\n");
-		}
-		ret = write(afd, transcodebuf, config.buffer_size);
-		printf("ret = %d\n", ret);
-		if ((ret < 0) && (audio_data->flush_enable == 1)) {
-			printf("Flush in progress \n");
-			usleep(5000);
+	for (ii = 0, count = 0; ; ii = ii + pkts_size) {
+		if ((ii < size) && (audio_data->quit != 1)) {
+			if (audio_data->mode) {
+				struct meta_in meta;
+				meta.ntimestamp.LowPart = ((audio_data->frame_count * 20000) & 0xFFFFFFFF);
+				meta.ntimestamp.HighPart = (((unsigned long long)(audio_data->frame_count
+								* 20000) >> 32) & 0xFFFFFFFF);
+				meta.offset = sizeof(struct meta_in);
+				meta.nflags = 0;
+				audio_data->frame_count++;
+				#ifdef DEBUG_LOCAL
+				printf("Meta In High part is %lu\n",
+						meta.ntimestamp.HighPart);
+				printf("Meta In Low part is %lu\n",
+						meta.ntimestamp.LowPart);
+				printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
+							(meta.ntimestamp.HighPart << 32) +
+							meta.ntimestamp.LowPart));
+				#endif
+				memcpy(transcodebuf, &meta, sizeof(struct meta_in));
+				read(fd, (transcodebuf + sizeof(struct meta_in)), pkts_size);
+			} else
+				read(fd, transcodebuf, pkts_size);
+			count++;
+			printf("writing %d no of packets\n", count);
+			if (audio_data->suspend == 1) {
+				printf("enter suspend mode\n");
+				ioctl(afd, AUDIO_STOP, 0);
+				while (audio_data->suspend == 1)
+					sleep(1);
+				ioctl(afd, AUDIO_START, 0);
+				printf("exit suspend mode\n");
+			}
+			ret = write(afd, transcodebuf, config.buffer_size);
+			printf("ret = %d\n", ret);
+			if ((ret < 0) && (audio_data->flush_enable == 1)) {
+				printf("Flush in progress \n");
+				usleep(5000);
+				ii = 0;
+				/* Set to start of data portion */
+				lseek(fd, audio_data->start_ptr, SEEK_SET);
+			}
+			if (count == 2)
+				ioctl(afd, AUDIO_START, 0);
+		} else if ((ii >= size) && (audio_data->repeat != 0)
+				&& (audio_data->quit != 1)) {
+			printf("\nRepeat playback\n");
 			ii = 0;
+			count = 2;
 			/* Set to start of data portion */
 			lseek(fd, audio_data->start_ptr, SEEK_SET);
-		}
-		if (count == 2)
-			ioctl(afd, AUDIO_START, 0);
+			if(audio_data->repeat > 0)
+				audio_data->repeat--;
+			sleep(1);
+			continue;
+		} else if (((ii >= size) && (audio_data->repeat == 0))
+				|| (audio_data->quit == 1))
+			break;
 	}
 
 	printf(" File reached end or quit cmd issued, exit loop \n");
@@ -504,6 +519,8 @@ int wmaplay_read_params(void)
 			audio_data->outfile = "/tmp/pcm.wav";
 			#endif
 			audio_data->mode = 0;
+			audio_data->repeat = 0;
+			audio_data->quit = 0;
 			token = strtok(NULL, " ");
 
 			while (token != NULL) {
@@ -532,6 +549,13 @@ int wmaplay_read_params(void)
 				} else if (!memcmp(token, "-encopt=",
 						   (sizeof("-encopt=") - 1))) {
 					audio_data->encopt = atoi(&token[sizeof("-encopt=") - 1]);
+				} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+					audio_data->repeat = atoi(&token[sizeof("-repeat=") - 1]);
+					if (audio_data->repeat == 0)
+						audio_data->repeat = -1;
+					else
+						audio_data->repeat--;
 				} else {
 					context->config.file_name = token;
 				}
@@ -616,9 +640,10 @@ int wma_play_control_handler(void *private_data)
 
 const char *wmaplay_help_txt = "Play WMA stream file: \n\
 echo \"playwma path_of_file -id=xxx -mode=x -datareqthr=x -channels=x -bps=x -freq=x -encopt=x\
--out=path_of_outfile\" > %s \n\
+-out=path_of_outfile -repeat=x\" > %s \n\
 Codec type of WMA file\n\
 mode= 0(tunnel mode) or 1 (non-tunnel mode) \n\
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Supported control command: pause, resume, volume, flush, quit \n\
 examples: \n\
 echo \"playqcp path_of_file -id=xxx -mode=<0 or 1>\" > %s \n\

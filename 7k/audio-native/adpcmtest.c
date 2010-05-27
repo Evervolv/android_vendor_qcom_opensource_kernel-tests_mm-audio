@@ -371,44 +371,56 @@ static int adpcm_play(struct audtest_config *cfg, unsigned rate,
 			if (ioctl(afd, AUDIO_GET_STATS, &stats) == 0)
 				fprintf(stderr, "%10d\n", stats.out_bytes);
 #endif
-			if (((sz = fill(buf, config.buffer_size, cookie)) < 0) || audio_data->quit) {
-				printf(" File reached end or quit cmd issued, exit loop \n");
-				if (audio_data->mode) {
-					struct meta_in meta;
-					meta.offset =
-						sizeof(struct meta_in);
-					meta.ntimestamp.LowPart =
-					((audio_data->frame_count * 20000) & 0xFFFFFFFF);
-					meta.ntimestamp.HighPart =
-					(((unsigned long long)(audio_data->frame_count
-					* 20000) >> 32) & 0xFFFFFFFF);
-					meta.nflags = EOS;
-					#ifdef DEBUG_LOCAL
-					printf("Meta In High part is %lu\n",
-						meta.ntimestamp.HighPart);
-					printf("Meta In Low part is %lu\n",
-						meta.ntimestamp.LowPart);
-					printf("Meta In ntimestamp: %llu\n",
-					((meta.ntimestamp.HighPart << 32)
-					 + meta.ntimestamp.LowPart));
-					#endif
-					memset(buf, 0,
-					sizeof(config.buffer_size));
-					memcpy(buf, &meta,
-						sizeof(struct meta_in));
-					if (write(afd, buf,
-					sizeof(struct meta_in)) < 0)
-						printf(" writing buffer\
-						for EOS failed\n");
+			if (((sz = fill(buf, config.buffer_size,
+				cookie)) < 0) || (audio_data->quit == 1)) {
+				if ((audio_data->repeat == 0) || (audio_data->quit == 1)) {
+					printf(" File reached end or quit cmd issued, exit loop \n");
+					if (audio_data->mode) {
+						struct meta_in meta;
+						meta.offset =
+							sizeof(struct meta_in);
+						meta.ntimestamp.LowPart =
+						((audio_data->frame_count * 20000) & 0xFFFFFFFF);
+						meta.ntimestamp.HighPart =
+						(((unsigned long long)(audio_data->frame_count
+						* 20000) >> 32) & 0xFFFFFFFF);
+						meta.nflags = EOS;
+						#ifdef DEBUG_LOCAL
+						printf("Meta In High part is %lu\n",
+							meta.ntimestamp.HighPart);
+						printf("Meta In Low part is %lu\n",
+							meta.ntimestamp.LowPart);
+						printf("Meta In ntimestamp: %llu\n",
+						((meta.ntimestamp.HighPart << 32)
+						 + meta.ntimestamp.LowPart));
+						#endif
+						memset(buf, 0,
+						sizeof(config.buffer_size));
+						memcpy(buf, &meta,
+							sizeof(struct meta_in));
+						if (write(afd, buf,
+						sizeof(struct meta_in)) < 0)
+							printf(" writing buffer\
+							for EOS failed\n");
+					} else {
+						printf("FSYNC: Reached end of \
+							file, calling fsync\n");
+						while (fsync(afd) < 0)
+							printf("fsync \
+								failed\n");
+					}
+					printf(" fill return NON NULL, exit loop \n");
+					break;
 				} else {
-					printf("FSYNC: Reached end of \
-						file, calling fsync\n");
-					while (fsync(afd) < 0)
-						printf("fsync \
-							failed\n");
+					printf("\nRepeat playback\n");
+					audio_data->avail = audio_data->org_avail;
+					audio_data->next  = audio_data->org_next;
+					cntW = 0;
+					if(audio_data->repeat > 0)
+						audio_data->repeat--;
+					sleep(1);
+					continue;
 				}
-				printf(" fill return NON NULL, exit loop \n");
-				break;
 			}
 			if (write(afd, buf, sz) != sz) {
 				if (audio_data->flush_enable == 1 && errno == EBUSY) {
@@ -425,7 +437,8 @@ static int adpcm_play(struct audtest_config *cfg, unsigned rate,
 				break;
 			} else {
 				cntW++;
-				printf(" adpcm_play: instance=%d cntW=%d\n", (int) audio_data, cntW);
+				printf(" adpcm_play: instance=%d repeat_cont=%d cntW=%d\n",
+						(int) audio_data, audio_data->repeat, cntW);
 			}
 		}
 		printf("end of adpcm play\n");
@@ -612,6 +625,8 @@ int adpcmplay_read_params(void)
 			#else
 				audio_data->outfile = "/tmp/pcm.wav";
 			#endif
+			audio_data->repeat = 0;
+			audio_data->quit = 0;
 			context->config.file_name = "/data/data.wav";
 			context->type = AUDIOTEST_TEST_MOD_ADPCM_DEC;
 			audio_data->mode = 0;
@@ -634,6 +649,13 @@ int adpcmplay_read_params(void)
 						(sizeof("-out=") - 1))) {
 					audio_data->outfile = token +
 							(sizeof("-out=")-1);
+				} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+					audio_data->repeat = atoi(&token[sizeof("-repeat=") - 1]);
+					if (audio_data->repeat == 0)
+						audio_data->repeat = -1;
+					else
+						audio_data->repeat--;
 				} else {
 					context->config.file_name = token;
 				}
@@ -696,9 +718,10 @@ int adpcm_play_control_handler(void *private_data)
 
 const char *adpcmplay_help_txt =
 "Play ADPCM file: type \n\
-echo \"playadpcm path_of_file -id=xxx -out=<filename>\" > /data/audio_test \n\
+echo \"playadpcm path_of_file -id=xxx -repeat=x -out=<filename>\" > /data/audio_test \n\
 Sample rate of ADPCM file <= 48000 \n\
 Bits per sample = 16 bits \n\
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Supported control command: pause, resume, volume, flush, quit\n ";
 
 void adpcmplay_help_menu(void)

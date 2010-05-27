@@ -31,6 +31,9 @@
 #include "audiotest_def.h"
 
 const char     *dev_file_name;
+static char *next, *org_next;
+static unsigned avail, org_avail;
+static int quit, repeat;
 
 static int pcm_play(struct audtest_config *cfg, unsigned rate, 
 					unsigned channels, int (*fill)(void *buf, 
@@ -112,16 +115,27 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 		if (ioctl(afd, AUDIO_GET_STATS, &stats) == 0)
 			fprintf(stderr,"%10d\n", stats.out_bytes);
 #endif
-			if ((sz = fill(buf, config.buffer_size, cookie)) < 0) {
-				printf(" fill return NON NULL, exit loop \n");
-				break;
+			if (((sz = fill(buf, config.buffer_size, cookie)) < 0) || (quit == 1)) {
+				if ((repeat == 0) || (quit == 1)) {
+					printf(" fill return NON NULL, exit loop \n");
+					break;
+				} else {
+					printf("\nRepeat playback\n");
+					avail = org_avail;
+					next  = org_next;
+					cntW = 0;
+					if(repeat > 0)
+						repeat--;
+					sleep(1);
+					continue;
+				}
 			}
 			if (write(afd, buf, sz) != sz) {
 				printf(" write return not equal to sz, exit loop\n");
 				break;
 			} else {
 				cntW++;
-				printf(" pcm_play: cntW=%d\n",cntW);
+				printf(" pcm_play: repeat_count=%d cntW=%d\n", repeat, cntW);
 			}
 		}
 		printf("end of pcm play\n");
@@ -165,10 +179,6 @@ struct wav_header {
 	uint32_t data_sz;
 };
 
-
-static char *next;
-static unsigned avail;
-
 static int fill_buffer(void *buf, unsigned sz, void *cookie)
 {
 	unsigned cpy_size = (sz < avail?sz:avail);   
@@ -188,6 +198,7 @@ static int play_file(struct audtest_config *config,
 					 int fd, unsigned count)
 {
 	next = (char*)malloc(count);
+	org_next = next;
 	printf(" play_file: count=%d,next=%s\n", count,next);
 	if (!next) {
 		fprintf(stderr,"could not allocate %d bytes\n", count);
@@ -198,6 +209,7 @@ static int play_file(struct audtest_config *config,
 		return -1;
 	}
 	avail = count;
+	org_avail = avail;
 	return pcm_play(config, rate, channels, fill_buffer, 0);
 }
 
@@ -422,6 +434,8 @@ int pcmplay_read_params(void) {
 	} else {
 		context->config.file_name = "/data/data.wav";
 		dev_file_name = "/dev/msm_pcm_out";
+		repeat = 0;
+		quit = 0;
 
 		token = strtok(NULL, " ");
 
@@ -431,6 +445,13 @@ int pcmplay_read_params(void) {
 			} else if (!memcmp(token, "-dev=",
 					(sizeof("-dev=") - 1))) {
 				dev_file_name = token + (sizeof("-dev=")-1);
+			} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+				repeat = atoi(&token[sizeof("-repeat=") - 1]);
+				if (repeat == 0)
+					repeat = -1;
+				else
+					repeat--;
 			} else {
 				context->config.file_name = token;
 			} 
@@ -524,7 +545,10 @@ int pcm_play_control_handler(void* private_data) {
                                                printf("session volume result %d\n", rc);
                                        }
                                }
-                       }
+                       } else if (!strcmp(token, "stop")) {
+			       quit = 1;
+			       printf("quit session\n");
+		       }
 #else
 			token = &token[sizeof("-id=") - 1];
 			printf("%s: cmd %s\n", __FUNCTION__, token);
@@ -561,10 +585,11 @@ int pcm_rec_control_handler(void* private_data) {
 
 const char *pcmplay_help_txt = 
 	"Play PCM file: type \n\
-echo \"playpcm path_of_file -id=xxx -dev=/dev/msm_pcm_dec or msm_pcm_out\" > tmp/audio_test \n\
+echo \"playpcm path_of_file -id=xxx -repeat=x -dev=/dev/msm_pcm_dec or msm_pcm_out\" > tmp/audio_test \n\
+Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Sample rate of PCM file <= 48000 \n\
 Bits per sample = 16 bits \n\
-Supported control command: pause, flush, volume\n ";
+Supported control command: pause, flush, volume, stop\n ";
 
 void pcmplay_help_menu(void) {
 	printf("%s\n", pcmplay_help_txt);

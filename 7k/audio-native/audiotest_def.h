@@ -94,6 +94,7 @@ struct audio_pvt_data {
   int frame_count;
   int quit;
   int bitstream_error;
+  int repeat;
   unsigned avail;
   unsigned org_avail;
   int datareqthr;
