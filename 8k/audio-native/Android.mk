@@ -19,7 +19,7 @@ endif
 include $(CLEAR_VARS)
 
 ifeq ($(strip $(QC_PROP)),true)
-mm-audio-native-inc     := $(LOCAL_PATH)/../../../../../qcom-proprietary/mm-audio/8k/atu/inc
+mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/atu
 endif
 
 LOCAL_MODULE            := mm-audio-native-test
