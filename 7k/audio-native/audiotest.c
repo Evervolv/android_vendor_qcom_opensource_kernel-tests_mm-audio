@@ -124,10 +124,10 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 	wmapro_play_control_handler,
 #ifdef AUDIOV2
 	adpcm_play_control_handler, voiceenc_control_handler,
+	NULL, fm_play_control_handler,
 #else
-	NULL, NULL,
+	NULL, NULL, NULL, NULL,
 #endif
-	NULL
 };
 
 int pb_control_read_params(void) {
@@ -184,8 +184,9 @@ struct audiotest_case_type audiotest_case_list[] = {
 #ifdef AUDIOV2
 	{ "voiceenc", voiceenc_read_params, voiceenc_help_menu, NULL } ,
 #if defined(QC_PROP)
-	{ "devctl", devctl_read_params, devctl_help_menu, NULL }
+	{ "devctl", devctl_read_params, devctl_help_menu, NULL },
 #endif
+	{ "playfm", fm_play_read_params, fm_play_help_menu, NULL },
 #endif
 };
 
