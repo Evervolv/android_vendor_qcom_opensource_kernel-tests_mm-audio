@@ -25,9 +25,14 @@
 #OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 #ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #--------------------------------------------------------------------------
-ifeq ($(TARGET_ARCH),arm)
 
-7k_AUDIO_PATH:= $(call my-dir)
-include $(7k_AUDIO_PATH)/audio-native/Android.mk
+AUDIO_NATIVE := $(call my-dir)
+include $(CLEAR_VARS)
 
+ifeq ($(TARGET_BOARD_PLATFORM), msm7k)
+    include $(AUDIO_NATIVE)/qdsp5/Android.mk
+else ifeq "$(findstring qsd8250,$(TARGET_PRODUCT))" "qsd8250"
+    include $(AUDIO_NATIVE)/qdsp6/Android.mk
+else ifeq "$(findstring qsd8650a,$(TARGET_PRODUCT))" "qsd8650a"
+    include $(AUDIO_NATIVE)/qdsp6/Android.mk
 endif

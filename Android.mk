@@ -26,13 +26,4 @@
 #ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #--------------------------------------------------------------------------
 
-AUDIO_PATH := $(call my-dir)
-include $(CLEAR_VARS)
-
-ifeq ($(TARGET_BOARD_PLATFORM), msm7k)
-    include $(AUDIO_PATH)/7k/Android.mk
-endif
-
-ifeq ($(TARGET_BOARD_PLATFORM), qsd8k)
-    include $(AUDIO_PATH)/8k/Android.mk
-endif
+include $(call all-subdir-makefiles)
