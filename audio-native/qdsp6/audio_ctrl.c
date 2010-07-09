@@ -57,6 +57,7 @@ int switch_to_device(int rxdev, int txdev)
 	int rc = 0;
 	unsigned long tx_device;
 	unsigned long rx_device;
+	int arr[2] = {0, 0};
 
 	fd = open("/dev/msm_audio_ctl", O_RDWR);
 	if (fd < 0) {
@@ -169,14 +170,16 @@ int switch_to_device(int rxdev, int txdev)
 	}
 
 	printf("rx device = %d\n",(int)rx_device);
-	if (ioctl(fd, AUDIO_SWITCH_DEVICE, &rx_device)) {
+	arr[0] = rx_device;
+	if (ioctl(fd, AUDIO_SWITCH_DEVICE, arr)) {
 		perror("could not switch device");
 		rc = -1;
 		goto done;
 	}
 
 	printf("tx device = %d\n",(int)tx_device);
-	if (ioctl(fd, AUDIO_SWITCH_DEVICE, &tx_device)) {
+	arr[0] = tx_device;
+	if (ioctl(fd, AUDIO_SWITCH_DEVICE, arr)) {
 		perror("could not switch device");
 		rc = -1;
 		goto done;
@@ -244,7 +247,7 @@ void* switchdev_thread(void* arg) {
 		(struct audiotest_thread_context*) arg;
 	int ret_val;
 
-	ret_val = switch_to_device(txdev, rxdev);
+	ret_val = switch_to_device(rxdev, txdev);
 	free_context(context);
 	pthread_exit((void*) ret_val);
 
