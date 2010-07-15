@@ -55,8 +55,9 @@
 #define AUDIOTEST_TEST_MOD_VOICE_ENC  15
 #define AUDIOTEST_TEST_MOD_DEVMGR     16
 #define AUDIOTEST_TEST_MOD_FM_DEC     17
+#define AUDIOTEST_TEST_MOD_LPA     18
 /* If added new module, need to update this number */
-#define AUDIOTEST_MAX_TEST_MOD 18
+#define AUDIOTEST_MAX_TEST_MOD 19
 
 #define DIR_RX 1
 #define DIR_TX 2
@@ -87,6 +88,7 @@ struct audtest_config {
 
 struct audio_pvt_data {
   int afd;
+  int ntfd;
   int mode; /* tunnel, non-tunnel */
   int recsize;
   int flush_enable;
@@ -95,6 +97,7 @@ struct audio_pvt_data {
   int frame_count;
   int quit;
   int bitstream_error;
+  int streaminfo_received;
   int repeat;
   unsigned avail;
   unsigned org_avail;

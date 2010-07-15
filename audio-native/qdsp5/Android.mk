@@ -61,6 +61,7 @@ ifeq ($(BOARD_USES_QCOM_AUDIO_V2), true)
 LOCAL_SRC_FILES += adpcmtest.c
 LOCAL_SRC_FILES += voiceenctest.c
 LOCAL_SRC_FILES += fm_test.c
+LOCAL_SRC_FILES += lpatest.c
 ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SRC_FILES += devctltest.c
 endif

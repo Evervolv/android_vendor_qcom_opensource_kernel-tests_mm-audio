@@ -96,6 +96,10 @@ void sndsetdev_help_menu(void);
 int voiceenc_read_params(void);
 int voiceenc_control_handler(void *private_data);
 void voiceenc_help_menu(void);
+/* Mp3 Test Module Interface Definition */
+int lpaplay_read_params(void);
+int lpa_play_control_handler(void* private_data);
+void lpaplay_help_menu(void);
 
 #if defined(QC_PROP)
 /* Dev Control Test Module definition */
