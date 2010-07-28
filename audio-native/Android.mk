@@ -35,4 +35,7 @@ else ifeq "$(findstring qsd8250,$(TARGET_PRODUCT))" "qsd8250"
     include $(AUDIO_NATIVE)/qdsp6/Android.mk
 else ifeq "$(findstring qsd8650a,$(TARGET_PRODUCT))" "qsd8650a"
     include $(AUDIO_NATIVE)/qdsp6/Android.mk
+else ifeq "$(findstring msm8660,$(TARGET_PRODUCT))" "msm8660"
+    BOARD_USES_QCOM_AUDIO_V2 := true
+    include $(AUDIO_NATIVE)/qdsp5/Android.mk
 endif
