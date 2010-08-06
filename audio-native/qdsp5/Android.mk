@@ -58,6 +58,7 @@ LOCAL_SRC_FILES += audioprofile.c
 LOCAL_SRC_FILES += snddevtest.c
 
 ifeq ($(BOARD_USES_QCOM_AUDIO_V2), true)
+LOCAL_SRC_FILES += sbctest.c
 LOCAL_SRC_FILES += adpcmtest.c
 LOCAL_SRC_FILES += voiceenctest.c
 LOCAL_SRC_FILES += fm_test.c

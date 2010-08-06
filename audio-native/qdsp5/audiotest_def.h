@@ -56,8 +56,9 @@
 #define AUDIOTEST_TEST_MOD_DEVMGR     16
 #define AUDIOTEST_TEST_MOD_FM_DEC     17
 #define AUDIOTEST_TEST_MOD_LPA     18
+#define AUDIOTEST_TEST_MOD_SBC_ENC 19
 /* If added new module, need to update this number */
-#define AUDIOTEST_MAX_TEST_MOD 19
+#define AUDIOTEST_MAX_TEST_MOD 20
 
 #define DIR_RX 1
 #define DIR_TX 2

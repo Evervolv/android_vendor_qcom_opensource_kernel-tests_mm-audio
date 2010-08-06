@@ -111,5 +111,10 @@ void devctl_help_menu(void);
 int fm_play_read_params(void);
 int fm_play_control_handler(void *private_data);
 void fm_play_help_menu(void);
+
+/* SBC Test Module Interface Definition */
+int sbcrec_read_params(void);
+int sbc_rec_control_handler(void* private_data);
+void sbcrec_help_menu(void);
 #endif
 #endif /* AUDIOTEST_CASE_H */

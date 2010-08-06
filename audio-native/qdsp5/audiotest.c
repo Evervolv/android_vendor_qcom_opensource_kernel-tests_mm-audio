@@ -125,8 +125,10 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 #ifdef AUDIOV2
 	adpcm_play_control_handler, voiceenc_control_handler,
 	NULL, fm_play_control_handler, lpa_play_control_handler,
+	sbc_rec_control_handler,
 #else
-	NULL, NULL, NULL, NULL, NULL
+	NULL, NULL, NULL, NULL, NULL,
+	NULL,
 #endif
 };
 
@@ -188,6 +190,7 @@ struct audiotest_case_type audiotest_case_list[] = {
 	{ "devctl", devctl_read_params, devctl_help_menu, NULL },
 #endif
 	{ "playfm", fm_play_read_params, fm_play_help_menu, NULL },
+	{ "recsbc", sbcrec_read_params, sbcrec_help_menu, NULL } ,
 #endif
 };
 

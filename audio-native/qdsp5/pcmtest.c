@@ -274,7 +274,8 @@ int wav_rec(struct audtest_config *config)
 	unsigned short enc_id;
 	int device_id;
 	int control = 0;
-	const char *device = "handset_tx";
+	const char *device = "a2dp_tx";
+	int a2dp_set = 0;
 #endif
 
 	if ((config->channel_mode != 2) && (config->channel_mode != 1)) {
@@ -321,7 +322,7 @@ int wav_rec(struct audtest_config *config)
 	write(fd, &hdr, sizeof(hdr));
 
 #ifdef AUDIOV2
-	afd = open("/dev/msm_pcm_in", O_RDONLY);
+	afd = open(dev_file_name, O_RDONLY);
 	if (afd < 0) {
 		perror("cannot open msm_pcm_in");
 		close(fd);
@@ -343,10 +344,28 @@ int wav_rec(struct audtest_config *config)
 		close(afd);
 		return -1;
 	}
-	if (devmgr_register_session(enc_id, DIR_TX) < 0) {
-		close(fd);
-		close(afd);
-		return -1;
+	if(!strcmp(dev_file_name, "/dev/msm_a2dp_in"))
+		a2dp_set = 1;
+	if(!a2dp_set) {
+		printf("Routing to non A2DP\n");
+		if (devmgr_register_session(enc_id, DIR_TX) < 0) {
+			close(fd);
+			close(afd);
+			return -1;
+		}
+	} else {
+		device_id = msm_get_device(device);
+		printf("Routing to A2DP\n");
+		if (devmgr_enable_device(device_id, DIR_TX) < 0){
+			perror("could not enable TX device\n");
+			return -1;
+		}
+		if (msm_route_stream(DIR_TX, enc_id, device_id, 1) < 0) {
+			perror("could not route stream to Device\n");
+			if (devmgr_disable_device(device_id, DIR_RX) < 0)
+				perror("could not disable device\n");
+			return -1;
+		}
 	}
 #endif
 	config->private_data = (void*) afd;
@@ -403,8 +422,23 @@ int wav_rec(struct audtest_config *config)
 	write(fd, &hdr, sizeof(hdr));
 	close(fd);
 #ifdef AUDIOV2
-	if (devmgr_unregister_session(enc_id, DIR_TX) < 0){
-		perror("could not unregister encode session\n");
+	if(!a2dp_set) {
+		printf("Derouting from non A2DP\n");
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0){
+			perror("could not unregister encode session\n");
+		}
+	} else {
+		printf("Derouting from A2DP\n");
+		if (devmgr_disable_device(device_id, DIR_TX) < 0){
+			perror("could not enable TX device\n");
+			return -1;
+		}
+		if (msm_route_stream(DIR_TX, enc_id, device_id, 0) < 0) {
+			perror("could not route stream to Device\n");
+			if (devmgr_disable_device(device_id, DIR_RX) < 0)
+				perror("could not disable device\n");
+			return -1;
+		}
 	}
 #endif
 	return 0;
@@ -413,8 +447,24 @@ int wav_rec(struct audtest_config *config)
 	close(afd);
 	close(fd);
 #ifdef AUDIOV2
-	if (devmgr_unregister_session(enc_id, DIR_TX) < 0){
-		perror("could not unregister encode session\n");
+	if(!a2dp_set) {
+		printf("Derouting from non A2DP\n");
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0){
+			perror("could not unregister encode session\n");
+		}
+	} else {
+		device_id = msm_get_device(device);
+		printf("De Routing to A2DP\n");
+		if (devmgr_enable_device(device_id, DIR_TX) < 0){
+			perror("could not enable TX device\n");
+			return -1;
+		}
+		if (msm_route_stream(DIR_TX, enc_id, device_id, 1) < 0) {
+			perror("could not route stream to Device\n");
+			if (devmgr_disable_device(device_id, DIR_RX) < 0)
+				perror("could not disable device\n");
+			return -1;
+		}
 	}
 #endif
 	unlink(config->file_name);
@@ -497,6 +547,7 @@ int pcmrec_read_params(void) {
 	} else {
 		context->config.sample_rate = 8000;
 		context->config.file_name = "/data/record.wav";
+		dev_file_name = "/dev/msm_pcm_in";
 		context->config.channel_mode = 1;  
 		context->type = AUDIOTEST_TEST_MOD_PCM_ENC;
 		token = strtok(NULL, " ");
@@ -511,6 +562,9 @@ int pcmrec_read_params(void) {
 				atoi(&token[sizeof("-cmode=") - 1]);
 			} else if (!memcmp(token,"-id=", (sizeof("-id=") - 1))) {
 				context->cxt_id = atoi(&token[sizeof("-id=") - 1]);
+			} else if (!memcmp(token, "-dev=",
+					(sizeof("-dev=") - 1))) {
+				dev_file_name = token + (sizeof("-dev=")-1);
 			} else {
 				context->config.file_name = token;
 			}
@@ -606,7 +660,7 @@ void pcmplay_help_menu(void) {
 
 const char *pcmrec_help_txt = 
 "Record pcm file: type \n\
-echo \"recpcm path_of_file -rate=xxx -cmode=x -id=xxx\" > tmp/audio_test \n\
+echo \"recpcm path_of_file -rate=xxx -cmode=x -id=xxx -dev=/dev/msm_pcm_in or msm_a2dp_in\" > tmp/audio_test \n\
 sample rate: 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000 \n\
 channel mode: 1 or 2 \n\
 Supported control command: stop\n ";
