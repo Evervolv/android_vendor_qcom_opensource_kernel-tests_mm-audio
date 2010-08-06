@@ -223,11 +223,11 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 
 	/* Open Device 	Node */
 	if (rec_type == 1) {
-		afd = open(QCELP_DEVICE_NODE, O_RDWR);
+		afd = open(QCELP_DEVICE_NODE, O_RDONLY);
 	} else if (rec_type == 2) {
-		afd = open(EVRC_DEVICE_NODE, O_RDWR);
+		afd = open(EVRC_DEVICE_NODE, O_RDONLY);
 	} else if (rec_type == 3) {
-		afd = open(AMRNB_DEVICE_NODE, O_RDWR);
+		afd = open(AMRNB_DEVICE_NODE, O_RDONLY);
 	} else
 		goto device_err;
 

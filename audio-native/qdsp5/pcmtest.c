@@ -320,12 +320,21 @@ int wav_rec(struct audtest_config *config)
 	}
 	write(fd, &hdr, sizeof(hdr));
 
-	afd = open("/dev/msm_pcm_in", O_RDWR);
+#ifdef AUDIOV2
+	afd = open("/dev/msm_pcm_in", O_RDONLY);
 	if (afd < 0) {
 		perror("cannot open msm_pcm_in");
 		close(fd);
 		return -1;
 	}
+#else
+        afd = open("/dev/msm_pcm_in", O_RDWR);
+        if (afd < 0) {
+                perror("cannot open msm_pcm_in");
+                close(fd);
+                return -1;
+        }
+#endif
 
 #ifdef AUDIOV2
 	if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
