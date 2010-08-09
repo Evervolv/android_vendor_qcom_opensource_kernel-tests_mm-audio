@@ -383,7 +383,7 @@ int aac_rec(struct audtest_config *config)
     goto fail;
   }
 
-  sz = 768;
+  sz = 1543;
   fprintf(stderr,"buffer size %d\n", sz);
   if (sz > sizeof(buf)) {
     fprintf(stderr,"buffer size %d too large\n", sz);
