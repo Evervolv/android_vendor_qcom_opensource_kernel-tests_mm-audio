@@ -515,7 +515,7 @@ int amrnb_rec(struct audtest_config *config)
 		return -1;
 	}
 
-	afd = open("/dev/msm_amrnb_in", O_RDWR);
+	afd = open("/dev/msm_amrnb_in", O_RDONLY);
 	if (afd < 0) {
 		perror("cannot open msm_amrnb_in");
 		close(fd);

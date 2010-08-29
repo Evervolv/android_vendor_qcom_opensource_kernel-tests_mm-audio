@@ -995,7 +995,7 @@ int aac_rec(struct audtest_config *config)
   }
 
 #ifdef AUDIOV2
-  afd = open("/dev/msm_aac_in", O_RDWR);
+  afd = open("/dev/msm_aac_in", O_RDONLY);
   if (afd < 0) {
     perror("cannot open msm_aac_in");
     close(fd);
