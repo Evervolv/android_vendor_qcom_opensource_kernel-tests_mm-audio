@@ -50,6 +50,7 @@ typedef unsigned int  uint16;
 #define AAC_ORIGINAL_COPY_SIZE        1
 #define AAC_HOME_SIZE                 1
 #define EOS			      1
+#define NUM_BITS_PER_SAMPLE		2
 
 #define MIN(A,B)	(((A) < (B))?(A):(B))
 
@@ -74,7 +75,7 @@ static struct sample_rate_idx sample_idx_tbl[10] = {
 uint8   audaac_header[AUDAAC_MAX_ADTS_HEADER_LENGTH];
 unsigned int audaac_hdr_bit_index;
 static unsigned int aac_rec_bitrate;
-
+int tickcount;
 /* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
 struct wav_header {		/* Simple wave header */
 	char Chunk_ID[4];	/* Store "RIFF" */
@@ -967,65 +968,326 @@ int aacplay_read_params(void) {
 	return 0;
 }
 
+
 static int rec_stop;
 
+/* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
+
+#define ID_RIFF 0x46464952
+#define ID_WAVE 0x45564157
+#define ID_FMT  0x20746d66
+#define ID_DATA 0x61746164
+
+#define FORMAT_PCM 1
+
+struct WAV_header {
+	uint32_t riff_id;
+	uint32_t riff_sz;
+	uint32_t riff_fmt;
+	uint32_t fmt_id;
+	uint32_t fmt_sz;
+	uint16_t audio_format;
+	uint16_t num_channels;
+	uint32_t sample_rate;
+	uint32_t byte_rate;		  /* sample_rate * num_channels * bps / 8 */
+	uint16_t block_align;	  /* num_channels * bps / 8 */
+	uint16_t bits_per_sample;
+	uint32_t data_id;
+	uint32_t data_sz;
+};
+
+static int fill_pcm_buffer(void *buf, unsigned sz, void *cookie)
+{
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cookie;
+	unsigned cpy_size = 0;
+	int ret = 0;
+
+	cpy_size = (sz < audio_data->avail ? sz : audio_data->avail);
+	printf("cpy_size = %d audio_data->next = %d buf = %d\n", cpy_size, audio_data->next, buf);
+	if (audio_data->avail == 0)
+		return -1;
+	if (!audio_data->next) {
+		printf("error in next buffer returning with out copying\n");
+		return -1;
+	}
+	if (cpy_size == 0) {
+		return -1;
+	}
+	memcpy(buf, audio_data->next, cpy_size);
+	audio_data->next += cpy_size;
+	audio_data->avail -= cpy_size;
+	return cpy_size;
+}
+
+
+void add_meta_out(char *pcm_buf, int eos, void *config, int buffer_size)
+{
+	unsigned long int duration = 0;
+	struct meta_out metaout;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config;
+	printf("add_meta_out");
+
+	metaout.offset = sizeof(metaout);
+	duration = audio_data->frame_count * ((buffer_size * 1000) /
+				(audio_data->freq * audio_data->channels
+				* NUM_BITS_PER_SAMPLE));
+	printf("duration = %x\n", duration);
+	metaout.ntimestamp.LowPart = duration & 0xFFFFFFFF;
+	metaout.ntimestamp.HighPart = (duration >> 32) & 0xFFFFFFFF;
+	metaout.nflags = eos;
+	metaout.sample_frequency = audio_data->freq;
+	metaout.channel = audio_data->channels;
+	metaout.tick_count = tickcount++;
+	memcpy(pcm_buf, &metaout, sizeof(metaout));
+#ifdef DEBUG_LOCAL
+	printf("Meta_out High part is %lu\n",
+				metaout.ntimestamp.HighPart);
+	printf("Meta_out Low part is %lu\n",
+				metaout.ntimestamp.LowPart);
+	printf("Meta Out Timestamp: %llu\n",
+				((metaout.ntimestamp.HighPart << 32)
+				 + metaout.ntimestamp.LowPart));
+#endif
+}
+
+static void aac_nt_enc(void *arg)
+{
+	struct meta_in meta;
+	struct audtest_config *config = (struct audtest_config *)arg;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *)
+						config->private_data;
+	struct msm_audio_pcm_config pcm_config;
+	int afd = audio_data->afd;
+	unsigned long long *time;
+	char *pcm_buf;
+	int fd, ret_val = 0;
+	int len, total_len;
+	int eos = 0;
+	struct WAV_header hdr;
+	int ret = 0;
+	int cntW = 0, sz = 0;
+	int n = 0;
+	//  unsigned rate, channels;
+	int pipe_fd[2];
+	int eos_sent = 0;
+	len = 0;
+	total_len = 0;
+
+	if (config == NULL) {
+		return -1;
+	}
+	fd = open(config->in_file_name, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "playwav: cannot open '%s'\n", config->in_file_name);
+		return -1;
+	}
+	if (read(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
+		fprintf(stderr, "playwav: cannot read header\n");
+		return -1;
+	}
+	fprintf(stderr,"playwav: %d ch, %d hz, %d bit, %s\n",
+			hdr.num_channels, hdr.sample_rate, hdr.bits_per_sample,
+			hdr.audio_format == FORMAT_PCM ? "PCM" : "unknown");
+	if ((hdr.riff_id != ID_RIFF) ||
+		(hdr.riff_fmt != ID_WAVE) ||
+		(hdr.fmt_id != ID_FMT)) {
+		fprintf(stderr, "playwav: '%s' is not a riff/wave file\n",
+		config->in_file_name);
+		return -1;
+	}
+	if ((hdr.audio_format != FORMAT_PCM) ||
+		(hdr.fmt_sz != 16)) {
+		fprintf(stderr, "playwav: '%s' is not pcm format\n", config->in_file_name);
+		return -1;
+	}
+	if (hdr.bits_per_sample != 16) {
+		fprintf(stderr, "playwav: '%s' is not 16bit per sample\n", config->in_file_name);
+		return -1;
+	}
+	audio_data->next = (char*)malloc(hdr.data_sz);
+	audio_data->org_next = audio_data->next;
+	printf(" play_file: count=%d,next=%d\n", hdr.data_sz, audio_data->next);
+	if (!audio_data->next) {
+		fprintf(stderr,"could not allocate %d bytes\n", hdr.data_sz);
+		return -1;
+	}
+	if (read(fd, audio_data->next, hdr.data_sz) != hdr.data_sz) {
+		fprintf(stderr,"could not read %d bytes\n", hdr.data_sz);
+		return -1;
+	}
+	audio_data->avail = hdr.data_sz;
+	audio_data->org_avail = audio_data->avail;
+
+	/* non - tunnel encoding portion */
+	printf(" selected non-tunnel part\n");
+	if (ioctl(afd, AUDIO_GET_CONFIG, &pcm_config)) {
+		perror("could not get config");
+		ret = -1;
+		goto err_state;
+	}
+	pcm_buf = (char*) malloc(sizeof(char) * pcm_config.buffer_size + sizeof(struct meta_out));
+		if (pcm_buf == NULL) {
+			perror("fail to allocate buffer\n");
+			ret = -1;
+			goto err_state;
+		}
+	printf("aac_nt_enc: buffer_size=%d, buffer_count=%d\n", pcm_config.buffer_size,
+		pcm_config.buffer_count);
+	audio_data->frame_count = pcm_config.buffer_count;
+	pcm_config.buffer_size = (8 * 1024) + sizeof(struct meta_out); /*taking 8k as
+									input buffer + size of meta*/
+	fprintf(stderr,"prefill\n");
+	for (n = 0; n < pcm_config.buffer_count; n++) {
+		if ((sz = fill_pcm_buffer((pcm_buf + sizeof(struct meta_out)), pcm_config.buffer_size - sizeof(struct meta_out), (void *)audio_data)) < 0)
+			break;
+		if (sz < (pcm_config.buffer_size - sizeof(struct meta_out)))
+			add_meta_out(pcm_buf, 1, &audio_data, pcm_config.buffer_size);
+		else
+			add_meta_out(pcm_buf, 0, &audio_data, pcm_config.buffer_size);
+		if (write(afd, pcm_buf, sz + sizeof(struct meta_out)) != sz)
+			//break;
+		audio_data->frame_count++;
+	}
+
+	cntW = cntW + pcm_config.buffer_count;
+	fprintf(stderr,"start encoding\n");
+	if (ioctl(afd, AUDIO_START, 0) < 0) {
+		perror("cannot start audio");
+		goto fail;
+	}
+	while (1) {
+		sz = fill_pcm_buffer(pcm_buf + sizeof(struct meta_out), pcm_config.buffer_size - sizeof(struct meta_out), (void *)audio_data);
+		printf("sz = %d\n", sz);
+		if (sz < (signed int)(pcm_config.buffer_size - sizeof(struct meta_out)) && !eos_sent) {
+			printf("sending eos\n");
+			add_meta_out(pcm_buf, 1, audio_data, pcm_config.buffer_size);
+			if (sz > 0)
+				sz += sizeof(struct meta_out);
+			else
+				sz = sizeof(struct meta_out);
+			eos_sent = 1;
+		}
+		else if (sz < 0) {
+			printf("end of file reached\n");
+			goto exit;
+		}
+		else {
+			add_meta_out(pcm_buf, 0, audio_data, pcm_config.buffer_size);
+			sz += sizeof(struct meta_out);
+		}
+		if (write(afd, pcm_buf, sz) != sz) {
+			printf(" write return not equal to sz, exit loop\n");
+			break;
+		} else {
+			cntW++;
+			audio_data->frame_count++;
+			printf(" NT enc PCM dump:cntW=%d frame_count = %d\n", cntW, audio_data->frame_count++);
+		}
+	}
+exit:
+	printf("end of pcm dump\n");
+	sleep(5);
+	printf("came out of sleep nt encoder function\n");
+	if (ioctl(afd, AUDIO_FLUSH, NULL)) {
+		perror("Failed to flush buffers\n");
+		goto fail;
+	}
+	free(pcm_buf);
+err_state:
+fail:
+	close(fd);
+	printf("returning from nt encoder function\n");
+	return ret;
+}
+
+
+struct aac_encoded_meta_in {
+	uint16_t metadata_len;
+	uint16_t time_stamp_dword_lsw;
+	uint16_t time_stamp_dword_msw;
+	uint16_t time_stamp_lsw;
+	uint16_t time_stamp_msw;
+	uint16_t nflag_lsw;
+	uint16_t nflag_msw;
+};
+
+int mode;
 int aac_rec(struct audtest_config *config)
 {
   unsigned char *buf;
   struct msm_audio_stream_config stream_cfg;
   struct msm_audio_aac_enc_config aac_enc_cfg;
+  struct audio_pvt_data audio_data;
+
   int sample_idx, loop;
-  unsigned sz ,framesize = 0;
-  int fd, afd;
+  unsigned int sz;
+  signed int framesize = 0;
+  int out_fd, in_fd, afd;
   unsigned total = 0;
   unsigned char tmp;
   static unsigned int cnt = 0;
+  pthread_t thread;
+  struct aac_encoded_meta_in nt_frame;
+  unsigned char *start_buf;
 #ifdef AUDIOV2
   unsigned short enc_id;
   int device_id;
   int control = 0;
   const char *device = "handset_tx";
 #endif
-
-  
-  fd = open(config->file_name, O_CREAT | O_RDWR, 0666);
-  if (fd < 0) {
-    perror("cannot open output file");
-    return -1;
-  }
-
+	mode = config->mode;
+	printf("file_name = %s\n", config->file_name);
+	out_fd = open(config->file_name, O_CREAT | O_RDWR, 0666);
+		if (out_fd < 0) {
+			perror("cannot open output file");
+			return -1;
+		}
 #ifdef AUDIOV2
-  afd = open("/dev/msm_aac_in", O_RDONLY);
-  if (afd < 0) {
-    perror("cannot open msm_aac_in");
-    close(fd);
-    return -1;
-  }
+	if (!mode) {
+		  afd = open("/dev/msm_aac_in", O_RDONLY);
+		  if (afd < 0) {
+			perror("cannot open msm_aac_in");
+			close(out_fd);
+			return -1;
+		  }
+	} else {
+		  afd = open("/dev/msm_aac_in", O_RDWR);
+		  if (afd < 0) {
+			perror("cannot open msm_aac_in");
+			return -1;
+		  }
+	}
 #else
   afd = open("/dev/msm_pcm_in", O_RDWR);
   if (afd < 0) {
     perror("cannot open msm_pcm_in");
-    close(fd);
+    close(out_fd);
     return -1;
   }
 #endif
 #ifdef AUDIOV2
-	if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
-		perror("could not get encoder session id\n");
-		close(fd);
-		close(afd);
-		return -1;
-	}
+	if (!mode) {
+		if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
+			perror("could not get encoder session id\n");
+			close(out_fd);
+			close(afd);
+			return -1;
+		}
 
-	if (devmgr_register_session(enc_id, DIR_TX) < 0) {
-		perror("could not get register encoder session id\n");
-		close(fd);
-		close(afd);
-		return -1;
+		if (devmgr_register_session(enc_id, DIR_TX) < 0) {
+			perror("could not get register encoder session id\n");
+			close(out_fd);
+			close(afd);
+			return -1;
+		}
 	}
 #endif
 
-  config->private_data = (void*) afd;
+	audio_data.afd = afd;
+	audio_data.mode = mode;
+	audio_data.channels = config->channel_mode;
+	audio_data.freq = config->sample_rate;
+	config->private_data = (struct audio_pvt_data *)&audio_data;
 
   cnt = 0;
   for (loop=0; loop< sizeof(sample_idx_tbl) / \
@@ -1040,18 +1302,21 @@ int aac_rec(struct audtest_config *config)
     perror("cannot read audio stream config");
     goto fail;
   }
-
-  printf("Default buffer size %d, buffer count %d\n", stream_cfg.buffer_size, stream_cfg.buffer_count);
-  buf = (char *) malloc(stream_cfg.buffer_size);
-  if (buf == NULL) {
-    perror("cannot allocate memory for record");
-    goto fail;
-  }
+	printf("Default buffer size %d, buffer count %d\n", stream_cfg.buffer_size, stream_cfg.buffer_count);
+	buf = (char *) malloc(stream_cfg.buffer_size);
+	if (buf == NULL) {
+		perror("cannot allocate memory for record");
+		goto fail;
+	}
+	start_buf = buf;
   /* Set buffer size to default, So AAC is selected as encoder in driver */
   if (ioctl(afd, AUDIO_SET_STREAM_CONFIG, &stream_cfg)) {
     perror("cannot write audio stream config");
     goto fail;
   }
+
+  if (mode)
+	pthread_create(&thread, NULL, aac_nt_enc, (void *) config);
 
   if (ioctl(afd, AUDIO_GET_AAC_ENC_CONFIG, &aac_enc_cfg)) {
     perror("cannot read aac encoder  config");
@@ -1063,48 +1328,66 @@ int aac_rec(struct audtest_config *config)
   aac_enc_cfg.channels = config->channel_mode;
   aac_enc_cfg.sample_rate = config->sample_rate;
   aac_enc_cfg.bit_rate = aac_rec_bitrate;
-
+  printf("channel mode = %d\n", aac_enc_cfg.channels);
   if (ioctl(afd, AUDIO_SET_AAC_ENC_CONFIG, &aac_enc_cfg)) {
     perror("cannot write aac encoder  config");
-    goto fail;
-  }
-
-  if (ioctl(afd, AUDIO_START, 0) < 0) {
-    perror("cannot start audio");
     goto fail;
   }
 
   fcntl(0, F_SETFL, O_NONBLOCK);
   fprintf(stderr,"\n*** RECORDING * HIT ENTER TO STOP ***\n");
 
+  if (!mode) {
+	if (ioctl(afd, AUDIO_START, 0) < 0) {
+		perror("cannot start audio");
+		goto fail;
+	}
+  }
+
   rec_stop = 0;
    while (!rec_stop) {
     framesize = read(afd, buf, stream_cfg.buffer_size);
-    
-    audaac_rec_install_adts_header_variable(framesize + AUDAAC_MAX_ADTS_HEADER_LENGTH,
+    printf("read call returned framesize = %d\n", framesize);
+
+    if (!config->mode) {
+		audaac_rec_install_adts_header_variable(framesize + AUDAAC_MAX_ADTS_HEADER_LENGTH,
 				sample_idx, (config->channel_mode - 1 ));
-    
-    write(fd,audaac_header,AUDAAC_MAX_ADTS_HEADER_LENGTH);  // writing aac adts header format with frame len
-    
-    printf(" AAC recoded frame num = %d , size = %d \n",++cnt,framesize);
-    if(write(fd, buf, framesize) != framesize) {
-      perror("cannot write buffer");
-      goto fail;
-    }
-    total += framesize;
+	} else {
+		audaac_rec_install_adts_header_variable(framesize + AUDAAC_MAX_ADTS_HEADER_LENGTH - sizeof(struct aac_encoded_meta_in),
+				sample_idx, (config->channel_mode - 1 ));
+		memcpy(&nt_frame, buf, sizeof(struct aac_encoded_meta_in));
+		buf = buf + sizeof(struct aac_encoded_meta_in);
+		printf("nflags_lsw = %d, nflags_msw = %d\n", nt_frame.nflag_lsw, nt_frame.nflag_msw);
+		framesize -= sizeof(struct aac_encoded_meta_in);
+	}
+    if (framesize > 0) {
+	    write(out_fd,audaac_header,AUDAAC_MAX_ADTS_HEADER_LENGTH);  // writing aac adts header format with frame len
+	    printf(" AAC recoded frame num = %d , size = %d\n",++cnt, framesize);
+	    if(write(out_fd, buf, framesize) != framesize) {
+	      perror("cannot write buffer");
+	      goto fail;
+	    }
+	    total += framesize;
+		if (config->mode)
+			buf = start_buf;
+    } else
+	rec_stop = 1;
   }
   done:
+  if (config->mode)
+   sleep(6);
   printf("\n*** RECORDING * STOPPED ***\n");
   close(afd);
 
-  if(buf)
-	free(buf);
-  close(fd);
-
+	if(buf)
+		free(start_buf);
+  close(out_fd);
+  printf("closed out file fd\n");
 #ifdef AUDIOV2
-  if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
-	return -1;
-  }
+	if (!config->mode)
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+			return -1;
+		}
 #endif
 
   return 0;
@@ -1113,11 +1396,12 @@ int aac_rec(struct audtest_config *config)
   close(afd);
   if(buf)
 	free(buf);
-  close(fd);
+  close(out_fd);
 #ifdef AUDIOV2
-  if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
-	return -1;
-  }
+	if (!config->mode)
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+			return -1;
+		}
 #endif
   unlink(config->file_name);
   return -1;
@@ -1145,6 +1429,7 @@ int aacrec_read_params(void) {
 		context->config.file_name = "/data/data.aac";
 		context->config.sample_rate = 44100;
 		context->config.channel_mode = 2;
+		context->config.mode = 0;
 		context->type = AUDIOTEST_TEST_MOD_AAC_ENC;
 		aac_rec_bitrate =  168000;
 	
@@ -1155,12 +1440,19 @@ int aacrec_read_params(void) {
 				context->cxt_id= atoi(&token[sizeof("-id=") - 1]);
 			} else if (!memcmp(token,"-rate=", (sizeof("-rate=" - 1)))) {
 					context->config.sample_rate = atoi(&token[sizeof("-rate=") - 1]);
-			} else if (!memcmp(token, "-cmode=", (sizeof("-cmode=") - 1))) {
+			} else if (!memcmp(token,"-mode=", (sizeof("-mode=" - 1)))) {
+					context->config.mode = atoi(&token[sizeof("-mode=") - 1]);
+			} else if (!memcmp(token, "-channel=", (sizeof("-channel=") - 1))) {
 					context->config.channel_mode =
-					atoi(&token[sizeof("-cmode=") - 1]);
+					atoi(&token[sizeof("-channel=") - 1]);
 			} else if (!memcmp(token, "-bps=", (sizeof("-bps=") - 1))) {
 					aac_rec_bitrate = atoi(&token[sizeof("-bps=") - 1]);
-			} else {
+			} else if (!memcmp(token, "-infile=", (sizeof("-infile=") - 1))) {
+					token = &token[sizeof("-infile=") - 1];
+					printf("infile = %s\n", token);
+					context->config.in_file_name = token;
+			} else if (!memcmp(token, "-outfile=", (sizeof("-outfile=") - 1))) {
+					token = &token[sizeof("-outfile=") - 1];
 					context->config.file_name = token;
 			}
 			token = strtok(NULL, " ");
@@ -1279,7 +1571,8 @@ void aacplay_help_menu(void) {
 
 const char *aacrec_help_txt =
 "Record aac file: type \n\
-echo \"recaac path_of_file -id=xxx -rate=xxxx -cmode=x -bps=xx\" > %s \n\
+echo \"recaac -infile=path_of_file -outfile=path_of_file \
+-id=xxx -rate=xxxx -channel=x -mode=x -bps=xx\" > %s \n\
 Sample rate of source <= 48000 \n \
 Channel mode 1 or 2 \n \
 bps: bit per second 64k to 384k \n \

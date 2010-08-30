@@ -77,9 +77,11 @@ union audtest_fmt_config_type {
 
 struct audtest_config {
   const char     *file_name;
+  const char     *in_file_name;
   unsigned       sample_rate;
   unsigned short channel_mode;
   unsigned short rec_codec_type; /* Recording type */
+  unsigned short mode;
   union audtest_fmt_config_type 
                  fmt_config;
   void           *private_data; /* given to individual test module 
