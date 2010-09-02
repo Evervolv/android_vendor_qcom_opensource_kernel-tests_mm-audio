@@ -86,6 +86,8 @@ struct audtest_config {
                  fmt_config;
   void           *private_data; /* given to individual test module 
                                    to store its private data */
+  unsigned short tgt;/* by default 7k */
+  unsigned int   frames_per_buf;
 };
 
 struct audio_pvt_data {
