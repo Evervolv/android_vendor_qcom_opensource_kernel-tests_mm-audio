@@ -82,7 +82,27 @@ static struct qcp_header append_header = {
         {'d','a','t','a'},0 /* Data */
         };
 
+static char amr_header[6] = { '#','!','A','M','R','\n'};
+
 #define QCP_HEADER_SIZE sizeof(struct qcp_header)
+#define AMR_HEADER_SIZE sizeof(amr_header)
+
+/* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
+struct wav_header {		/* Simple wave header */
+	char Chunk_ID[4];	/* Store "RIFF" */
+	unsigned int Chunk_size;
+	char Riff_type[4];	/* Store "WAVE" */
+	char Chunk_ID1[4];	/* Store "fmt " */
+	unsigned int Chunk_fmt_size;
+	unsigned short Compression_code;	/*1 - 65,535,  1 - pcm */
+	unsigned short Number_Channels;	/* 1 - 65,535 */
+	unsigned int Sample_rate;	/*  1 - 0xFFFFFFFF */
+	unsigned int Bytes_Sec;	/*1 - 0xFFFFFFFF */
+	unsigned short Block_align;	/* 1 - 65,535 */
+	unsigned short Significant_Bits_sample;	/* 1 - 65,535 */
+	char Chunk_ID2[4];	/* Store "data" */
+	unsigned int Chunk_data_size;
+} __attribute__ ((packed));
 
 static int rec_type; // record type
 static int rec_stop;
@@ -106,6 +126,30 @@ static uint8_t qcelp_pkt_size[5] = {0x00, 0x03, 0x07, 0x10, 0x22};
 static uint8_t evrc_pkt_size[5] = {0x00, 0x02, 0x00, 0xa, 0x16};
 static uint8_t amrnb_pkt_size[8] = {0x0c, 0x0d, 0x0f, 0x11, 0x13, 0x20, 0x1a, 0x1f};
 
+typedef struct TIMESTAMP{
+	unsigned long LowPart;
+	unsigned long HighPart;
+} TIMESTAMP __attribute__ ((packed));
+
+struct meta_in{
+	unsigned short offset;
+	TIMESTAMP ntimestamp;
+	unsigned int nflags;
+} __attribute__ ((packed));
+
+struct meta_out{
+	unsigned offset_to_frame;
+        unsigned frame_size;
+        unsigned encoded_pcm_samples;
+        unsigned msw_ts;
+        unsigned lsw_ts;
+        unsigned nflags;
+}__attribute__ ((packed));
+
+struct meta_out_enc{
+	unsigned char num_of_frames;
+	struct meta_out meta_out_dsp[];
+}__attribute__ ((packed));
 
 static void create_qcp_header(int Datasize, int Frames)
 {
@@ -192,6 +236,173 @@ static void create_qcp_header(int Datasize, int Frames)
 	}
 	append_header.s_data = Datasize;
         return;
+}
+
+/* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
+
+static int fill_buffer(void *buf, unsigned sz, void *cookie)
+{
+	struct meta_in meta;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cookie;
+	unsigned cpy_size = (sz < audio_data->avail?sz:audio_data->avail);
+
+	if (audio_data->avail == 0) {
+		return -1;
+	}
+
+	if (audio_data->mode) {
+		meta.ntimestamp.LowPart = ((audio_data->frame_count * 20000) & 0xFFFFFFFF);
+		meta.ntimestamp.HighPart = (((unsigned long long)(audio_data->frame_count
+						* 20000) >> 32) & 0xFFFFFFFF);
+		meta.offset = sizeof(struct meta_in);
+		meta.nflags = 0;
+		audio_data->frame_count++;
+		#ifdef DEBUG_LOCAL
+		printf("Meta In High part is %lu\n",
+				meta.ntimestamp.HighPart);
+		printf("Meta In Low part is %lu\n",
+				meta.ntimestamp.LowPart);
+		printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
+					(meta.ntimestamp.HighPart << 32) +
+					meta.ntimestamp.LowPart));
+		#endif
+		memcpy(buf, &meta, sizeof(struct meta_in));
+		memcpy((buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+	} else
+
+		memcpy(buf, audio_data->next, cpy_size);
+
+	audio_data->next += cpy_size;
+	audio_data->avail -= cpy_size;
+
+	if (audio_data->mode) {
+		return cpy_size + sizeof(struct meta_in);
+	} else
+		return cpy_size;
+}
+
+static void *voiceenc_nt(struct audtest_config *clnt_config)
+{
+	struct meta_in meta;
+	struct stat stat_buf;
+	char *content_buf;
+	int fd, ret_val = 0;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
+	int afd = audio_data->afd;
+	unsigned long long *time;
+	int len, total_len;
+	len = 0;
+	total_len = 0;
+	unsigned buffer_size;
+	struct wav_header hdr;
+        struct msm_audio_config config_pcm;
+
+	printf("voiceenc pcm write Thread\n");
+	fd = open(clnt_config->in_file_name, O_RDONLY);
+	if (fd < 0) {
+		printf("Err while opening PCM file for encoder \
+			: %s\n", clnt_config->in_file_name);
+		pthread_exit((void *)ret_val);
+	}
+	(void) fstat(fd, &stat_buf);
+
+	if (read(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
+		printf("Cannot read file header\n");
+		close(fd);
+		pthread_exit((void *)ret_val);
+	}
+	printf("voiceenc_nt: %d ch, %d hz, 0x%4x bit\n",
+			hdr.Number_Channels, hdr.Sample_rate, hdr.Significant_Bits_sample);
+
+	printf("Total file size: %d\n", stat_buf.st_size);
+	buffer_size = stat_buf.st_size - sizeof(hdr);
+
+	if (ioctl(afd, AUDIO_GET_CONFIG, &config_pcm)) {
+               printf("Error getting AUDIO_GET_CONFIG\n");
+		close(fd);
+		pthread_exit((void *)ret_val);
+	}
+        printf("Default: config_pcm.buffer_count = %d , \
+                config_pcm.buffer_size=%d \n", \
+                config_pcm.buffer_count, config_pcm.buffer_size);
+
+	audio_data->recsize = config_pcm.buffer_size;
+
+        config_pcm.channel_count = hdr.Number_Channels;
+	config_pcm.sample_rate	 = hdr.Sample_rate;
+
+        audio_data->recbuf = (char *)malloc(audio_data->recsize);
+        if (!audio_data->recbuf) {
+                printf("could not allocate memory for pcm buffer\n");
+		close(fd);
+		pthread_exit((void *)ret_val);
+	}
+        memset(audio_data->recbuf, 0, audio_data->recsize);
+        if (ioctl(afd, AUDIO_SET_CONFIG, &config_pcm)) {
+                printf("could not set PCM config\n");
+		close(fd);
+		free(audio_data->recbuf);
+		pthread_exit((void *)ret_val);
+	}
+        if (ioctl(afd, AUDIO_GET_CONFIG, &config_pcm)) {
+                printf("Error getting AUDIO_GET_PCM_CONFIG\n");
+		close(fd);
+		free(audio_data->recbuf);
+		pthread_exit((void *)ret_val);
+	}
+        printf("Set: config_pcm.buffer_count = %d , \
+                config_pcm.buffer_size=%d \n", \
+                config_pcm.buffer_count, config_pcm.buffer_size);
+
+	/* set back to witohut meta as the buffer corresponding to PCM */
+        audio_data->recsize = audio_data->recsize - sizeof(struct meta_in);
+	ioctl(afd, AUDIO_START, 0);
+	audio_data->next = (char*)malloc(buffer_size);
+	printf("Total file PCM len: %d,next=%d\n", buffer_size, (int) audio_data->next);
+
+	if (!audio_data->next) {
+                fprintf(stderr,"could not allocate %d bytes\n", buffer_size);
+		close(fd);
+		free(audio_data->recbuf);
+		pthread_exit((void *)ret_val);
+        }
+
+	audio_data->org_next = audio_data->next;
+	content_buf = audio_data->org_next;
+
+	if (read(fd, audio_data->next, buffer_size) != buffer_size) {
+		fprintf(stderr,"could not read %d bytes\n", buffer_size);
+		goto fail;
+	}
+
+	audio_data->avail = stat_buf.st_size;
+	audio_data->org_avail = audio_data->avail;
+	do {
+		if((len = fill_buffer(audio_data->recbuf, audio_data->recsize, audio_data)) < 0) {
+			printf("end of file reached \n");
+			break;
+		} else {
+			printf("fill buffer size = %d \n", len);
+			len = write(afd, audio_data->recbuf, len);
+		}
+	} while (1);
+	/* End of file, send EOS */
+	if(audio_data->mode) {
+		meta.ntimestamp.LowPart = ((audio_data->frame_count * 20000) & 0xFFFFFFFF);
+		meta.ntimestamp.HighPart = (((unsigned long long)(audio_data->frame_count
+						* 20000) >> 32) & 0xFFFFFFFF);
+		meta.offset = sizeof(struct meta_in);
+		meta.nflags = 0x01;
+		memcpy(audio_data->recbuf, &meta, sizeof(struct meta_in));
+		write(afd, audio_data->recbuf, sizeof(struct meta_in));
+		printf("Sent EOS on input buffer\n");
+	}
+fail:
+	close(fd);
+	free(content_buf);
+	free(audio_data->recbuf);
+	pthread_exit((void *)ret_val);
+	return NULL;
 }
 
 static int voiceenc_start(struct audtest_config *clnt_config)
@@ -335,7 +546,7 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 
 	ioctl(afd, AUDIO_START, 0);
 
-	printf("Voice encoder started \n");
+	printf("Voice encoder started 7k\n");
 
 	if(frame_format == 1) { /* QCP file */
 	        lseek(fd, QCP_HEADER_SIZE, SEEK_SET);
@@ -421,13 +632,273 @@ file_err:
 	return -1;
 }
 
+static int voiceenc_start_8660(struct audtest_config *clnt_config)
+{
+	int afd, fd, dfd=0;
+	unsigned char tmp;
+        unsigned char buf[1024];
+        unsigned sz;
+	int readcnt,writecnt;
+	struct msm_audio_stream_config cfg;
+	struct msm_audio_stats stats;
+	struct msm_audio_buf_cfg buf_cfg;
+	int datasize=0, framecnt=0;
+	unsigned short enc_id;
+	unsigned int open_flags;
+	pthread_t thread;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
+	memset(&stats,0,sizeof(stats));
+	memset(&cfg,0,sizeof(cfg));
+
+	fd = open(clnt_config->file_name, O_CREAT | O_RDWR, 0666);
+
+	if (fd < 0) {
+		printf("Unable to create output file = %s\n",
+			clnt_config->file_name);
+		goto file_err;
+	}
+	else
+		printf("file created =%s\n",clnt_config->file_name);
+
+	if (clnt_config->mode)
+		open_flags = O_RDWR;
+	else
+		open_flags = O_RDONLY;
+
+	/* Open Device 	Node */
+	if (rec_type == 1) {
+			afd = open(QCELP_DEVICE_NODE, open_flags);
+	} else if (rec_type == 2) {
+			afd = open(EVRC_DEVICE_NODE, open_flags);
+	} else if (rec_type == 3) {
+			afd = open(AMRNB_DEVICE_NODE, open_flags);
+	} else
+		goto device_err;
+
+	if (afd < 0) {
+		printf("Unable to open audio device = %s in mode %d\n",
+			(rec_type == 1? QCELP_DEVICE_NODE:(rec_type == 2? \
+				EVRC_DEVICE_NODE: AMRNB_DEVICE_NODE)), clnt_config->mode);
+		goto device_err;
+	}
+
+	if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
+		perror("could not get encoder id\n");
+		close(fd);
+		close(afd);
+		return -1;
+	}
+	if(!clnt_config->mode)
+		if (devmgr_register_session(enc_id, DIR_TX) < 0) {
+			close(fd);
+			close(afd);
+			return -1;
+		}
+
+	/* Config param */
+	if(ioctl(afd, AUDIO_GET_STREAM_CONFIG, &cfg)) {
+		printf("Error getting AUDIO_GET_STREAM_CONFIG\n");
+		goto fail;
+	}
+	printf("Default buffer size = 0x%8x\n", cfg.buffer_size);
+	printf("Default buffer count = 0x%8x\n",cfg.buffer_count);
+
+	if(ioctl(afd, AUDIO_SET_STREAM_CONFIG, &cfg)) {
+		printf("Error setting AUDIO_SET_STREAM_CONFIG\n");
+		goto fail;
+	}
+	/* Config param */
+	if(ioctl(afd, AUDIO_GET_BUF_CFG, &buf_cfg)) {
+		printf("Error getting AUDIO_GET_BUF_CONFIG\n");
+		goto fail;
+	}
+	printf("Default meta_info_enable = 0x%8x\n", buf_cfg.meta_info_enable);
+	printf("Default frames_per_buf = 0x%8x\n", buf_cfg.frames_per_buf);
+	buf_cfg.frames_per_buf = clnt_config->frames_per_buf;
+	if(ioctl(afd, AUDIO_SET_BUF_CFG, &buf_cfg)) {
+		printf("Error setting AUDIO_SET_BUF_CONFIG\n");
+		goto fail;
+	}
+	if (rec_type == 1) {
+		if (ioctl(afd, AUDIO_GET_QCELP_ENC_CONFIG, &qcelpcfg)) {
+			printf("Error: AUDIO_GET_QCELP_ENC_CONFIG failed\n");
+			goto fail;
+		}
+		printf("cdma rate = 0x%8x\n", qcelpcfg.cdma_rate);
+		printf("min_bit_rate = 0x%8x\n", qcelpcfg.min_bit_rate);
+		printf("max_bit_rate = 0x%8x\n", qcelpcfg.max_bit_rate);
+		qcelpcfg.cdma_rate = max_rate;
+		qcelpcfg.min_bit_rate = min_rate;
+		qcelpcfg.max_bit_rate = max_rate;
+		if (ioctl(afd, AUDIO_SET_QCELP_ENC_CONFIG, &qcelpcfg)) {
+			printf("Error: AUDIO_SET_QCELP_ENC_CONFIG failed\n");
+			goto fail;
+		}
+		printf("cdma rate = 0x%8x\n", qcelpcfg.cdma_rate);
+		printf("min_bit_rate = 0x%8x\n", qcelpcfg.min_bit_rate);
+		printf("max_bit_rate = 0x%8x\n", qcelpcfg.max_bit_rate);
+	} else if(rec_type == 2) {
+
+		if (ioctl(afd, AUDIO_GET_EVRC_ENC_CONFIG, &evrccfg)) {
+			printf("Error: AUDIO_GET_EVRC_ENC_CONFIG failed\n");
+			goto fail;
+		}
+		printf("cdma rate = 0x%8x\n", evrccfg.cdma_rate);
+		printf("min_bit_rate = 0x%8x\n", evrccfg.min_bit_rate);
+		printf("max_bit_rate = 0x%8x\n", evrccfg.max_bit_rate);
+		evrccfg.cdma_rate = max_rate;
+		evrccfg.min_bit_rate = min_rate;
+		evrccfg.max_bit_rate = max_rate;
+		if (ioctl(afd, AUDIO_SET_EVRC_ENC_CONFIG, &evrccfg)) {
+			printf("Error: AUDIO_GET_EVRC_ENC_CONFIG failed\n");
+			goto fail;
+		}
+		printf("cdma rate = 0x%8x\n", evrccfg.cdma_rate);
+		printf("min_bit_rate = 0x%8x\n", evrccfg.min_bit_rate);
+		printf("max_bit_rate = 0x%8x\n", evrccfg.max_bit_rate);
+	} else if (rec_type == 3) {
+
+		/* AMRNB specific settings */
+		if (ioctl(afd, AUDIO_GET_AMRNB_ENC_CONFIG_V2, &amrnbcfg_v2)) {
+			perror("Error: AUDIO_GET_AMRNB_ENC_CONFIG_V2 failed");
+			goto fail;
+		}
+		printf("dtx mode = 0x%8x\n", amrnbcfg_v2.dtx_enable);
+		printf("rate = 0x%8x\n", amrnbcfg_v2.band_mode);
+		amrnbcfg_v2.dtx_enable = dtx_mode; /* 0 - DTX off, 1 - DTX on */
+		amrnbcfg_v2.band_mode = max_rate;
+		if (ioctl(afd, AUDIO_SET_AMRNB_ENC_CONFIG_V2, &amrnbcfg_v2)) {
+			perror("Error: AUDIO_GET_AMRNB_ENC_CONFIG_V2 failed");
+			goto fail;
+		}
+		printf("dtx mode = 0x%8x\n", amrnbcfg_v2.dtx_enable);
+		printf("rate = 0x%8x\n", amrnbcfg_v2.band_mode);
+	}
+
+	/* Record form voice link */
+	if (rec_source <= VOC_REC_BOTH ) {
+
+		if (ioctl(afd, AUDIO_SET_INCALL, &rec_source)) {
+			perror("Error: AUDIO_SET_INCALL failed");
+			goto fail;
+		}
+		printf("rec source = 0x%8x\n", rec_source);
+	}
+	/* Store handle for commands pass*/
+	audio_data->afd = (void *) afd;
+	sz = cfg.buffer_size;
+        if (clnt_config->mode) {
+               	/* non - tunnel portion for 8660 */
+               	pthread_create(&thread, NULL, voiceenc_nt, (void *)clnt_config);
+	} else {
+		ioctl(afd, AUDIO_START, 0);
+	}
+
+	printf("Voice encoder started 8660\n");
+
+	if((frame_format == 1) || ((frame_format == 2) && (rec_type != 3))) { /* QCP file */
+	        lseek(fd, QCP_HEADER_SIZE, SEEK_SET);
+		printf("qcp_headsize %d\n",QCP_HEADER_SIZE);
+		printf("QCP format\n");
+	} else if ((frame_format == 2) && (rec_type == 3)) /*AMR file*/ {
+	        lseek(fd, 0, SEEK_SET);
+        	write(fd, (char *)&amr_header, AMR_HEADER_SIZE);
+	} else
+		printf("DSP format\n");
+
+	rec_stop = 0;
+	while(!rec_stop) {
+		memset(buf,0,sz);
+		readcnt = read(afd, buf, sz);
+                if (readcnt <= 0) {
+                        printf("cannot read buffer error code =0x%8x", readcnt);
+			goto fail;
+                }
+		else
+		{
+			/* Multiframing Supported */
+			unsigned char *memptr = buf;
+			struct meta_out_enc *meta_enc;
+			struct meta_out *meta;
+			unsigned char nr_of_frames;
+			meta_enc = (struct meta_out_enc *)memptr;
+			nr_of_frames = meta_enc->num_of_frames;
+			meta = (struct meta_out *) (memptr + sizeof(meta_enc->num_of_frames));
+			printf("meta = 0x%8x meta_enc = 0x%8x\n", meta, meta_enc);
+			printf("Read cnt = %d\n", readcnt);
+			printf("number of frames = 0x%2x\n", nr_of_frames);
+			while(nr_of_frames > 0) {
+				printf(" offset_to_frame = %d frame_size = %d\n", meta->offset_to_frame, meta->frame_size);
+				printf(" encoded_pcm_samples = %d\n", meta->encoded_pcm_samples);
+				printf(" mswts = %d lswts = %d\n", meta->msw_ts, meta->lsw_ts);
+				printf(" mswts = %d lswts = %d\n", meta->msw_ts, meta->lsw_ts);
+				printf(" nflags = 0x%8x\n", meta->nflags);
+				if (meta->nflags & 0x01) {
+					printf("EOS reached on input as well \n");
+					goto done;
+				}
+				memptr = buf + sizeof(meta_enc->num_of_frames) + meta->offset_to_frame;
+				readcnt = meta->frame_size;
+				writecnt = write(fd, memptr, readcnt);
+				if (writecnt <= 0) {
+					printf("cannot write buffer error code =0x%8x", writecnt);
+					goto fail;
+				}
+				framecnt++;
+				datasize += writecnt;
+				meta++;
+				printf("meta = 0x%8x\n", meta);
+				printf(" frame cnt = %d\n", framecnt);
+				nr_of_frames --;
+                	}
+        	}
+	}
+done:
+	ioctl(afd, AUDIO_GET_STATS, &stats);
+	printf("\n read_bytes = %d, read_frame_counts = %d\n",datasize, framecnt);
+	ioctl(afd, AUDIO_STOP, 0);
+	if((frame_format == 1) || ((frame_format == 2) && (rec_type != 3))) { /* QCP file */
+		create_qcp_header(datasize, framecnt);
+	        lseek(fd, 0, SEEK_SET);
+		write(fd, (char *)&append_header, QCP_HEADER_SIZE);
+	}
+
+	printf("Secondary encoder stopped \n");
+	if(!audio_data->recbuf)
+	        free(audio_data->recbuf);
+	close(afd);
+	if(!clnt_config->mode)
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+			perror("\ncould not unregister recording session\n");
+		}
+	return 0;
+fail:
+	if(!audio_data->recbuf)
+	        free(audio_data->recbuf);
+	close(afd);
+
+	if(!clnt_config->mode)
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+			perror("\ncould not unregister recording session\n");
+		}
+device_err:
+	close(fd);
+	unlink(clnt_config->file_name);
+file_err:
+	return -1;
+}
+
 void *voiceenc_thread(void *arg)
 {
 	struct audiotest_thread_context *context =
 	    (struct audiotest_thread_context *)arg;
 	int ret_val;
 
-	ret_val = voiceenc_start(&context->config);
+	if(context->config.tgt == 0x07)
+		ret_val = voiceenc_start(&context->config);
+	else if(context->config.tgt == 0x08)
+		ret_val = voiceenc_start_8660(&context->config);
+
 	free_context(context);
 	pthread_exit((void *)ret_val);
 	return NULL;
@@ -442,49 +913,78 @@ int voiceenc_read_params(void)
 	if ((context = get_free_context()) == NULL) {
 		ret_val = -1;
 	} else {
-		#ifdef _ANDROID_
-			context->config.file_name = "/data/sample.qcp";
-		#else
-			context->config.file_name = "/tmp/sample.qcp";
-		#endif
-		context->type = AUDIOTEST_TEST_MOD_VOICE_ENC;
-		token = strtok(NULL, " ");
-		rec_type = 0; /* qcelp */
-		frame_format = 0;
-		dtx_mode = 0;
-		min_rate = 4;
-		max_rate = 4;
-		rec_source = 0;
-		while (token != NULL) {
-			if (!memcmp(token, "-id=", (sizeof("-id=") - 1))) {
-				context->cxt_id =
-				    atoi(&token[sizeof("-id=") - 1]);
-			}else if (!memcmp(token, "-type=", (sizeof("-type=") - 1))) {
-				rec_type =
-				    atoi(&token[sizeof("-type=") - 1]);
-			}else if (!memcmp(token, "-fmt=", (sizeof("-fmt=") - 1))) {
-				frame_format =
-				    atoi(&token[sizeof("-fmt=") - 1]);
-			}else if (!memcmp(token, "-dtx=", (sizeof("-dtx=") - 1))) {
-				dtx_mode =
-				    atoi(&token[sizeof("-dtx=") - 1]);
-			}else if (!memcmp(token, "min=", (sizeof("-min=") - 1))) {
-				min_rate =
-				    atoi(&token[sizeof("-min=") - 1]);
-			}else if (!memcmp(token, "-max=", (sizeof("-max=") - 1))) {
-				max_rate =
-				    atoi(&token[sizeof("-max=") - 1]);
-			}else if (!memcmp(token, "-src=", (sizeof("-src=") - 1))) {
-				rec_source =
-				    atoi(&token[sizeof("-src=") - 1]);
-			} else if (!memcmp(token, "-out=",
-                                        (sizeof("-out=") - 1))) {
-                                context->config.file_name = token + (sizeof("-out=")-1);
-			}
+		struct audio_pvt_data *audio_data;
+		audio_data = (struct audio_pvt_data *) malloc(sizeof(struct audio_pvt_data));
+		if(!audio_data) {
+			printf("error allocating audio instance structure \n");
+			free_context(context);
+			ret_val = -1;
+		} else {
+			printf(" Created audio instance 0x%8x \n",(unsigned int) audio_data);
+			memset(audio_data, 0, sizeof(struct audio_pvt_data));
+			#ifdef _ANDROID_
+				context->config.file_name = "/data/sample.qcp";
+				context->config.in_file_name = "/data/pcm.wav";
+			#else
+				context->config.file_name = "/tmp/sample.qcp";
+				context->config.in_file_name = "/tmp/pcm.wav";
+			#endif
+			context->type = AUDIOTEST_TEST_MOD_VOICE_ENC;
 			token = strtok(NULL, " ");
+			rec_type = 1; /* qcelp */
+			frame_format = 0;
+			dtx_mode = 0;
+			min_rate = 4;
+			max_rate = 4;
+			rec_source = 0;
+			context->config.mode = 0;
+			context->config.tgt = 0x07;
+			context->config.frames_per_buf= 1;
+			audio_data->mode = 0;
+			while (token != NULL) {
+				if (!memcmp(token, "-id=", (sizeof("-id=") - 1))) {
+					context->cxt_id =
+					    atoi(&token[sizeof("-id=") - 1]);
+				}else if (!memcmp(token, "-type=", (sizeof("-type=") - 1))) {
+					rec_type =
+					    atoi(&token[sizeof("-type=") - 1]);
+				}else if (!memcmp(token, "-fmt=", (sizeof("-fmt=") - 1))) {
+					frame_format =
+					    atoi(&token[sizeof("-fmt=") - 1]);
+				}else if (!memcmp(token, "-dtx=", (sizeof("-dtx=") - 1))) {
+					dtx_mode =
+					    atoi(&token[sizeof("-dtx=") - 1]);
+				}else if (!memcmp(token, "min=", (sizeof("-min=") - 1))) {
+					min_rate =
+					    atoi(&token[sizeof("-min=") - 1]);
+				}else if (!memcmp(token, "-max=", (sizeof("-max=") - 1))) {
+					max_rate =
+					    atoi(&token[sizeof("-max=") - 1]);
+				}else if (!memcmp(token, "-src=", (sizeof("-src=") - 1))) {
+					rec_source =
+					    atoi(&token[sizeof("-src=") - 1]);
+				}else if (!memcmp(token,"-mode=", (sizeof("-mode=" - 1)))) {
+						context->config.mode = atoi(&token[sizeof("-mode=") - 1]);
+						audio_data->mode = context->config.mode;
+				}else if (!memcmp(token, "-out=",
+                	                        (sizeof("-out=") - 1))) {
+                        	        context->config.file_name = token + (sizeof("-out=")-1);
+				}else if (!memcmp(token, "-tgt=", (sizeof("-tgt=") - 1))) {
+						context->config.tgt = atoi(&token[sizeof("-tgt=") - 1]);
+				}else if (!memcmp(token, "-infile=", (sizeof("-infile=") - 1))) {
+						token = &token[sizeof("-infile=") - 1];
+						printf("infile = %s\n", token);
+						context->config.in_file_name = token;
+				}else if (!memcmp(token, "-frames=", (sizeof("-frames=") - 1))) {
+					context->config.frames_per_buf= atoi(&token[sizeof("-frames=") - 1]);
+					printf("Num of frames per buf=%d\n",context->config.frames_per_buf);
+				}
+				token = strtok(NULL, " ");
+			}
+			context->config.private_data = (struct audio_pvt_data *) audio_data;
+			pthread_create(&context->thread, NULL,
+				       voiceenc_thread, (void *)context);
 		}
-		pthread_create(&context->thread, NULL,
-			       voiceenc_thread, (void *)context);
 	}
 
 	return ret_val;
@@ -514,11 +1014,15 @@ int voiceenc_control_handler(void *private_data)
 
 const char *voiceenc_help_txt =
 	"Voice encoder \n \
-echo \"voiceenc -id=xxx -out=path_of_file -type=yy -fmt=zz -dtx=yy -min=zz -max=yy -src=zz\" > %s \n\
+echo \"voiceenc -id=xxx -infile=path_of_inputfile -out=path_of_outputfile -type=yy -fmt=zz -dtx=yy -min=zz -max=yy -src=zz -frames=ww -mode=zz -tgt=zz\" > %s \n\
 type: 1 - qcelp, 2 - evrc, 3 - amrnb \n \
-fmt: 0 - dsp 1 - qcp \n \
+fmt: 0 - dsp 1 - qcp[dsp transcode] 2 - qcp [no dsp transcode] \n \
 src: 0 - Uplink 1 - Downlink, 2 - UL/DL, 3 - Mic \n \
-bps: bit per second 64k to 384k \n \
+dtx: 0 - disable 1 - enable \n \
+tgt: 08 - for 8660 target, default 7k target \n \
+min:max: rate qcelp 1 to 4, rate evrc 1 to 4[exclude 2], rate amr 1 to 7 \n \
+frames: number of frames per buffer(default 1)\n \
+mode: 0 - Tunnel 1 - NonTunnel\n \
 examples: \n\
 echo \"voiceenc -id=123 -out=path_of_file -type=3 -fmt=1 -dtx=0 -min=7 -max=7 -src=3\" > %s \n\
 Supported control command: stop \n ";
