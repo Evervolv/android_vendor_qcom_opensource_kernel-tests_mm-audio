@@ -25,6 +25,11 @@ endif
 ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-def += -DQC_PROP
 endif
+
+ifeq "$(findstring msm8660,$(TARGET_PRODUCT))" "msm8660"
+mm-audio-native-def += -DQDSP6V2
+endif
+
 # ---------------------------------------------------------------------------------
 #                       Make the apps-test (mm-audio-native-test)
 # ---------------------------------------------------------------------------------
@@ -56,6 +61,7 @@ LOCAL_SRC_FILES += wmaprotest.c
 LOCAL_SRC_FILES += voicememotest.c
 LOCAL_SRC_FILES += audioprofile.c
 LOCAL_SRC_FILES += snddevtest.c
+LOCAL_SRC_FILES     += equalizer.c
 
 ifeq ($(BOARD_USES_QCOM_AUDIO_V2), true)
 LOCAL_SRC_FILES += sbctest.c

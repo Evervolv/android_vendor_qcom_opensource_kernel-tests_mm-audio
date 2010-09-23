@@ -29,6 +29,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include "audiotest_def.h"
+#include "equalizer.h"
 
 const char     *dev_file_name;
 static char *next, *org_next;
@@ -583,6 +584,7 @@ int pcm_play_control_handler(void* private_data) {
 	char *token;
 #if defined(QC_PROP) && defined(AUDIOV2)
 	int volume;
+	int eq_preset;
 #endif
 
 	token = strtok(NULL, " ");
@@ -608,7 +610,20 @@ int pcm_play_control_handler(void* private_data) {
                                                printf("session volume result %d\n", rc);
                                        }
                                }
-                       } else if (!strcmp(token, "stop")) {
+                       } else if (!strcmp(token, "eq")) {
+                               token = strtok(NULL, " ");
+                               if (!memcmp(token, "-preset=",
+                                       (sizeof("-preset=") - 1))) {
+                                        eq_preset = atoi(&token[sizeof("-preset=") - 1]);
+					if ((eq_preset >= 0) && (eq_preset < MAX_PRESETS))
+                                		set_pcm_default_eq_values(drvfd, eq_preset);
+					else {
+                                                printf("Wrong preset:%d Check command: \
+                                                for supported preset values\n", eq_preset);
+                                                printf("mm-audio-native-test -format playpcm\n");
+                                        }
+                               }
+			} else if (!strcmp(token, "stop")) {
 			       quit = 1;
 			       printf("quit session\n");
 		       }
@@ -652,7 +667,27 @@ echo \"playpcm path_of_file -id=xxx -repeat=x -dev=/dev/msm_pcm_dec or msm_pcm_o
 Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
 Sample rate of PCM file <= 48000 \n\
 Bits per sample = 16 bits \n\
-Supported control command: pause, flush, volume, stop\n ";
+Supported control command: pause, flush, volume, stop, equalizer\n\
+examples: \n\
+echo \"control_cmd -id=xxx -cmd=eq -preset=yyyy\" > %s \n\
+                                   0 - BLANK \n\
+                                   1 - CLUB \n\
+                                   2 - DANCE \n\
+                                   3 - FULLBASS \n\
+                                   4 - FULLBASSTREBLE \n\
+                                   5 - FULLTREBLE \n\
+                                   6 - LAPTOP \n\
+                                   7 - LARGEHALL \n\
+                                   8 - LIVE \n\
+                                   9 - PARTY \n\
+                                  10 - POP \n\
+                                  11 - REGGAE \n\
+                                  12 - ROCK \n\
+                                  13 - SKA \n\
+                                  14 - SOFT \n\
+                                  15 - SOFTROCK \n\
+                                  16 - TECHNO \n";
+
 
 void pcmplay_help_menu(void) {
 	printf("%s\n", pcmplay_help_txt);
