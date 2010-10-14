@@ -26,7 +26,7 @@ ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-def += -DQC_PROP
 endif
 
-ifeq "$(findstring msm8660,$(TARGET_PRODUCT))" "msm8660"
+ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
 mm-audio-native-def += -DQDSP6V2
 endif
 
