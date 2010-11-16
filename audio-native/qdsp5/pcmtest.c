@@ -35,6 +35,7 @@ const char     *dev_file_name;
 static char *next, *org_next;
 static unsigned avail, org_avail;
 static int quit, repeat;
+static int rec_source;
 
 static int pcm_play(struct audtest_config *cfg, unsigned rate, 
 					unsigned channels, int (*fill)(void *buf, 
@@ -400,6 +401,18 @@ int wav_rec(struct audtest_config *config)
 		goto fail;
 	}
 
+#ifdef AUDIOV2
+	/* Record form voice link */
+	if (rec_source <= VOC_REC_BOTH ) {
+
+		if (ioctl(afd, AUDIO_SET_INCALL, &rec_source)) {
+			perror("Error: AUDIO_SET_INCALL failed");
+			goto fail;
+		}
+		printf("rec source = 0x%8x\n", rec_source);
+	}
+#endif
+
 	if (ioctl(afd, AUDIO_START, 0) < 0) {
 		perror("cannot start audio");
 		goto fail;
@@ -410,7 +423,7 @@ int wav_rec(struct audtest_config *config)
 	while(!rec_stop) {
 		if (read(afd, buf, sz) != sz) {
 			perror("cannot read buffer");
-			goto fail;
+			goto done;
 		}
 		if (write(fd, buf, sz) != sz) {
 			perror("cannot write buffer");
@@ -556,6 +569,7 @@ int pcmrec_read_params(void) {
 		dev_file_name = "/dev/msm_pcm_in";
 		context->config.channel_mode = 1;  
 		context->type = AUDIOTEST_TEST_MOD_PCM_ENC;
+		rec_source = 3;
 		token = strtok(NULL, " ");
 
 		while (token != NULL) {
@@ -571,6 +585,8 @@ int pcmrec_read_params(void) {
 			} else if (!memcmp(token, "-dev=",
 					(sizeof("-dev=") - 1))) {
 				dev_file_name = token + (sizeof("-dev=")-1);
+			} else if (!memcmp(token, "-src=", (sizeof("-src=") - 1))) {
+				rec_source = atoi(&token[sizeof("-src=") - 1]);
 			} else {
 				context->config.file_name = token;
 			}
@@ -700,8 +716,9 @@ void pcmplay_help_menu(void) {
 
 const char *pcmrec_help_txt = 
 "Record pcm file: type \n\
-echo \"recpcm path_of_file -rate=xxx -cmode=x -id=xxx -dev=/dev/msm_pcm_in or msm_a2dp_in\" > tmp/audio_test \n\
+echo \"recpcm path_of_file -rate=xxx -cmode=x -id=xxx -src=x -dev=/dev/msm_pcm_in or msm_a2dp_in\" > tmp/audio_test \n\
 sample rate: 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000 \n\
+src: 0 - Uplink 1 - Downlink, 2 - UL/DL, 3 - Mic \n\
 channel mode: 1 or 2 \n\
 Supported control command: stop\n ";
 
