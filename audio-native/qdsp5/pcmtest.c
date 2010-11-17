@@ -198,6 +198,7 @@ static int play_file(struct audtest_config *config,
 					 unsigned rate, unsigned channels,
 					 int fd, unsigned count)
 {
+	int ret = 0;
 	next = (char*)malloc(count);
 	org_next = next;
 	printf(" play_file: count=%d,next=%s\n", count,next);
@@ -211,7 +212,11 @@ static int play_file(struct audtest_config *config,
 	}
 	avail = count;
 	org_avail = avail;
-	return pcm_play(config, rate, channels, fill_buffer, 0);
+	ret = pcm_play(config, rate, channels, fill_buffer, 0);
+	free(org_next);
+	next = NULL;
+	org_next = NULL;
+	return ret;
 }
 
 int wav_play(struct audtest_config *config)
