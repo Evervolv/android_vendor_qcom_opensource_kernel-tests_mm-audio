@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -36,10 +36,15 @@
 #include "audiotest_def.h"
 #include "control.h"
 
+#ifdef QDSP6V2
+#include "acdb-loader.h"
+#endif
+
 #ifdef AUDIOV2
 #define DEVMGR_MAX_PLAYBACK_SESSION 4
 #define DEVMGR_MAX_RECORDING_SESSION 2
 #define DEVMGR_DEFAULT_SID 65523
+#define ANC_FF_STEREO_RX_ACDB_ID 26
 
 static int devmgr_devid_rx;
 static int devmgr_devid_tx;
@@ -51,6 +56,10 @@ unsigned short devmgr_sid_rx_array[DEVMGR_MAX_PLAYBACK_SESSION];
 unsigned short devmgr_sid_tx_array[DEVMGR_MAX_PLAYBACK_SESSION];
 static int devmgr_sid_count_rx = 0;
 static int devmgr_sid_count_tx = 0;
+
+#ifdef QDSP6V2
+static int acdb_init_count;
+#endif
 
 const char *devctl_help_text =
 "\nDevice Control Help: MAINLY USED FOR SWITCHING THE AUDIO DEVICE.	\n\
@@ -72,8 +81,17 @@ Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
 	echo \"devctl -cmd=disable_dev -dev_id=x\" > /data/audio_test	\n\
 	echo \"devctl -cmd=disable_dev -dev_id=y\" > /data/audio_test	\n\
 where x,y = any of the supported device IDs listed below,           	\n\
-z = 0/1 where 0 is unmute, 1 is mute 				    	\n\
-Note:                                                               	\n\
+z = 0/1 where 0 is unmute, 1 is mute 				    	\n"
+#ifdef QDSP6V2
+"	To enable active noise cancellation:				\n\
+	echo \"devctl -cmd=enable_dev -dev_id=v\" > /data/audio_test	\n\
+	echo \"devctl -cmd=enable_anc\" > /data/audio_test		\n\
+where v = ANC Device ID							\n\
+If ANC Device is already enabled, then just run the enable_anc command  \n\
+	To disable active noise cancellation:				\n\
+	echo \"devctl -cmd=disable_anc\" > /data/audio_test		\n"
+#endif
+"Note:                                                               	\n\
 (i)   Handset RX/TX is set as default device for all playbacks/recordings \n\
 (ii)  After a device switch, audio will be routed to the last set   	\n\
       device                                                        	\n\
@@ -300,6 +318,10 @@ int devmgr_devctl_handler()
 	int ret_val = 0, sid, dev_source, dev_dest, index, dev_id,
 		txdev_id, rxdev_id;
 
+#ifdef QDSP6V2
+	char *anc_device = "anc_headset_stereo_rx";
+	int device = 0;
+#endif
 	token = strtok(NULL, " ");
 
 	if (token != NULL) {
@@ -522,7 +544,28 @@ int devmgr_devctl_handler()
 							("-mute=") - 1]);
 					msm_set_voice_tx_mute(mute);
 				}
-			} else {
+			}
+#ifdef QDSP6V2
+			else if (!strcmp(token, "enable_anc")) {
+				if (!acdb_init_count) {
+					ret_val = acdb_loader_init_ACDB();
+					if (ret_val) {
+						printf("Error %d: ACDB init failed\n", ret_val);
+						return ret_val;
+					}
+					acdb_init_count++;
+				}
+				ret_val |= acdb_loader_send_anc_cal(ANC_FF_STEREO_RX_ACDB_ID);
+				device = msm_get_device(anc_device);
+				ret_val |= msm_enable_anc(device, 1);
+				printf("Returned from enabling anc %d\n", ret_val);
+			} else if (!strcmp(token, "disable_anc")) {
+				device = msm_get_device(anc_device);
+				ret_val = msm_enable_anc(device, 0);
+				printf("Returned from disabling anc %d\n", ret_val);
+			}
+#endif
+			else {
 				printf("%s: Invalid command", __func__);
 				printf("%s\n", devctl_help_text);
 				ret_val = -1;

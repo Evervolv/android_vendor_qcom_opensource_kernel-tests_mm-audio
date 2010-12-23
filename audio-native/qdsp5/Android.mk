@@ -38,6 +38,9 @@ include $(CLEAR_VARS)
 
 ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
+ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-acdb-util
+endif
 endif
 
 LOCAL_MODULE            := mm-audio-native-test
@@ -47,6 +50,9 @@ LOCAL_PRELINK_MODULE    := false
 ifeq ($(strip $(QC_PROP)),true)
 LOCAL_C_INCLUDES        := $(mm-audio-native-inc)
 LOCAL_SHARED_LIBRARIES  := libaudioalsa
+ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+LOCAL_SHARED_LIBRARIES	+= libacdbloader
+endif
 endif
 
 LOCAL_SRC_FILES := audiotest.c
