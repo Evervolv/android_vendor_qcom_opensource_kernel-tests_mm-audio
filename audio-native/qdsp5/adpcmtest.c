@@ -88,7 +88,7 @@ static struct pcm_header append_header = {
 typedef struct TIMESTAMP{
 	unsigned long LowPart;
 	unsigned long HighPart;
-} TIMESTAMP __attribute__ ((packed));
+} __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in{
 	unsigned short offset;
@@ -157,7 +157,7 @@ static void *adpcm_dec(void *arg)
 			goto fail;
 		} else if (len != 0) {
 			memcpy(&meta, audio_data->recbuf, sizeof(struct meta_out));
-			time = (unsigned long long)(audio_data->recbuf + 2);
+			time = (unsigned long long *)(audio_data->recbuf + 2);
 			meta.ntimestamp.LowPart = (*time & 0xFFFFFFFF);
 			meta.ntimestamp.HighPart = ((*time >> 32) & 0xFFFFFFFF);
 			#ifdef DEBUG_LOCAL
@@ -166,7 +166,7 @@ static void *adpcm_dec(void *arg)
 			printf("Meta_out Low part is %lu\n",
 					meta.ntimestamp.LowPart);
 			printf("Meta Out Timestamp: %llu\n",
-					((meta.ntimestamp.HighPart << 32)
+					(((unsigned long long)meta.ntimestamp.HighPart << 32)
 					 + meta.ntimestamp.LowPart));
 			#endif
 			if (meta.nflags == EOS) {
@@ -249,7 +249,6 @@ static int adpcm_play(struct audtest_config *cfg, unsigned rate,
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cfg->private_data;
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	if (audio_data->mode) {
@@ -391,7 +390,7 @@ static int adpcm_play(struct audtest_config *cfg, unsigned rate,
 						printf("Meta In Low part is %lu\n",
 							meta.ntimestamp.LowPart);
 						printf("Meta In ntimestamp: %llu\n",
-						((meta.ntimestamp.HighPart << 32)
+						(((unsigned long long)meta.ntimestamp.HighPart << 32)
 						 + meta.ntimestamp.LowPart));
 						#endif
 						memset(buf, 0,
@@ -482,12 +481,12 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 				meta.ntimestamp.HighPart);
 		printf("Meta In Low part is %lu\n",
 				meta.ntimestamp.LowPart);
-		printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
-					(meta.ntimestamp.HighPart << 32) +
+		printf("Meta In ntimestamp: %llu\n", (((unsigned long long)
+					meta.ntimestamp.HighPart << 32) +
 					meta.ntimestamp.LowPart));
 		#endif
 		memcpy(buf, &meta, sizeof(struct meta_in));
-		memcpy((buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+		memcpy(((char *)buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
 	} else
 		memcpy(buf, audio_data->next, cpy_size);
 
@@ -501,14 +500,14 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 }
 
 static int play_file(struct audtest_config *config, unsigned rate,
-		unsigned channels, int fd, unsigned count)
+		unsigned channels, int fd, size_t count)
 {
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config->private_data;
 	int ret_val = 0;
 	char *content_buf;
 
 	audio_data->next = (char *)malloc(count);
-	printf(" play_file: count=%d,next=%s\n", count, audio_data->next);
+	printf(" play_file: count=%d,next=%p\n", count, audio_data->next);
 	if (!audio_data->next) {
 		fprintf(stderr, "could not allocate %d bytes\n", count);
 		return -1;
@@ -516,7 +515,7 @@ static int play_file(struct audtest_config *config, unsigned rate,
 	content_buf = audio_data->next;
 	audio_data->org_next = audio_data->next;
 
-	if (read(fd, audio_data->next, count) != count) {
+	if (read(fd, audio_data->next, count) != (ssize_t) count) {
 		fprintf(stderr, "could not read %d bytes\n", count);
 		free(content_buf);
 		return -1;
@@ -530,7 +529,6 @@ static int play_file(struct audtest_config *config, unsigned rate,
 
 int adpcm_wav_play(struct audtest_config *config)
 {
-	struct stat stat_buf;
 	struct wav_header hdr;
 	uint32_t data_size, id_data;
 	int fd;
@@ -718,7 +716,7 @@ int adpcm_play_control_handler(void *private_data)
 
 const char *adpcmplay_help_txt =
 "Play ADPCM file: type \n\
-echo \"playadpcm path_of_file -id=xxx -repeat=x -out=<filename>\" > /data/audio_test \n\
+echo \"playadpcm path_of_file -id=xxx -repeat=x -out=<filename>\" > %s \n\
 Sample rate of ADPCM file <= 48000 \n\
 Bits per sample = 16 bits \n\
 Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
@@ -726,6 +724,6 @@ Supported control command: pause, resume, volume, flush, quit\n ";
 
 void adpcmplay_help_menu(void)
 {
-	printf("%s\n", adpcmplay_help_txt);
+	printf(adpcmplay_help_txt, cmdfile);
 }
 

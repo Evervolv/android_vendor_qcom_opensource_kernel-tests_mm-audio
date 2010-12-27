@@ -51,7 +51,6 @@ static int pcm_play(struct audtest_config *cfg, unsigned rate,
 	int ret = 0;
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	afd = open(dev_file_name, O_WRONLY);
@@ -181,9 +180,13 @@ struct wav_header {
 	uint32_t data_sz;
 };
 
-static int fill_buffer(void *buf, unsigned sz, void *cookie)
+static int fill_buffer(void *buf, unsigned sz,  void *cookie)
 {
-	unsigned cpy_size = (sz < avail?sz:avail);   
+	unsigned cpy_size = (sz < avail?sz:avail);
+
+	/* Below statement to remove warning for unused variable cookie,
+	   but to keep function prototype intact */
+	(void) cookie;
 
 	if (avail == 0)
 		return -1;
@@ -197,17 +200,17 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 
 static int play_file(struct audtest_config *config, 
 					 unsigned rate, unsigned channels,
-					 int fd, unsigned count)
+					 int fd, size_t count)
 {
 	int ret = 0;
 	next = (char*)malloc(count);
 	org_next = next;
-	printf(" play_file: count=%d,next=%s\n", count,next);
+	printf(" play_file: count=%d,next=%p\n", count,next);
 	if (!next) {
 		fprintf(stderr,"could not allocate %d bytes\n", count);
 		return -1;
 	}
-	if (read(fd, next, count) != count) {
+	if (read(fd, next, count) != (ssize_t)count) {
 		fprintf(stderr,"could not read %d bytes\n", count);
 		return -1;
 	}
@@ -276,11 +279,9 @@ int wav_rec(struct audtest_config *config)
 	unsigned sz; //n;
 	int fd, afd;
 	unsigned total = 0;
-	unsigned char tmp;
 #ifdef AUDIOV2
 	unsigned short enc_id;
-	int device_id;
-	int control = 0;
+	int device_id=-1;
 	const char *device = "a2dp_tx";
 	int a2dp_set = 0;
 #endif
@@ -421,11 +422,11 @@ int wav_rec(struct audtest_config *config)
 	fprintf(stderr,"\n*** RECORDING IN PROGRESS ***\n");
 
 	while(!rec_stop) {
-		if (read(afd, buf, sz) != sz) {
+		if (read(afd, buf, sz) != (ssize_t)sz) {
 			perror("cannot read buffer");
 			goto done;
 		}
-		if (write(fd, buf, sz) != sz) {
+		if (write(fd, buf, sz) != (ssize_t)sz) {
 			perror("cannot write buffer");
 			goto fail;
 		}
@@ -637,7 +638,11 @@ int pcm_play_control_handler(void* private_data) {
                                        (sizeof("-preset=") - 1))) {
                                         eq_preset = atoi(&token[sizeof("-preset=") - 1]);
 					if ((eq_preset >= 0) && (eq_preset < MAX_PRESETS))
+						#ifdef QDSP6V2
                                 		set_pcm_default_eq_values(drvfd, eq_preset);
+						#else
+						printf("not supported\n");
+						#endif
 					else {
                                                 printf("Wrong preset:%d Check command: \
                                                 for supported preset values\n", eq_preset);

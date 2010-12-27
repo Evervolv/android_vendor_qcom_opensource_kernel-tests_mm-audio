@@ -102,7 +102,7 @@ static struct wav_header append_header = {
 typedef struct TIMESTAMP{
 	unsigned long LowPart;
 	unsigned long HighPart;
-} TIMESTAMP __attribute__ ((packed));
+} __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in{
 	unsigned short offset;
@@ -346,7 +346,7 @@ static void *aac_dec(void *arg)
 			}
 		} else if (len != 0) {
 			memcpy(&meta, audio_data->recbuf, sizeof(struct meta_out));
-			time = (unsigned long long)(audio_data->recbuf + 2);
+			time = (unsigned long long *)(audio_data->recbuf + 2);
 			meta.ntimestamp.LowPart = (*time & 0xFFFFFFFF);
 			meta.ntimestamp.HighPart = ((*time >> 32) & 0xFFFFFFFF);
 			#ifdef DEBUG_LOCAL
@@ -355,7 +355,7 @@ static void *aac_dec(void *arg)
 			printf("Meta_out Low part is %lu\n",
 					meta.ntimestamp.LowPart);
 			printf("Meta Out Timestamp: %llu\n",
-					((meta.ntimestamp.HighPart << 32)
+					(((unsigned long long)meta.ntimestamp.HighPart << 32)
 					 + meta.ntimestamp.LowPart));
 			#endif
 			if (meta.nflags == EOS) {
@@ -474,7 +474,6 @@ static int initiate_play(struct audtest_config *clnt_config,
 
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
@@ -653,7 +652,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 						printf("Meta In Low part is %lu\n",
 							meta.ntimestamp.LowPart);
 						printf("Meta In ntimestamp: %llu\n",
-						((meta.ntimestamp.HighPart << 32)
+						(((unsigned long long)meta.ntimestamp.HighPart << 32)
 						 + meta.ntimestamp.LowPart));
 						#endif
 						memset(buf, 0,
@@ -756,12 +755,12 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 				meta.ntimestamp.HighPart);
 		printf("Meta In Low part is %lu\n",
 				meta.ntimestamp.LowPart);
-		printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
-					(meta.ntimestamp.HighPart << 32) +
+		printf("Meta In ntimestamp: %llu\n", (((unsigned long long)
+					meta.ntimestamp.HighPart << 32) +
 					meta.ntimestamp.LowPart));
 		#endif
 		memcpy(buf, &meta, sizeof(struct meta_in));
-		memcpy((buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+		memcpy(((char*)buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
 	} else
 		memcpy(buf, audio_data->next, cpy_size);
 
@@ -775,14 +774,14 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 }
 
 static int play_file(struct audtest_config *config, 
-					 int fd, unsigned count)
+					 int fd, size_t count)
 {
 	int ret_val = 0;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config->private_data;
 	char *content_buf;
 
 	audio_data->next = (char*)malloc(count);
-	printf(" play_file: count=%d,next=%d\n", count, (int) audio_data->next);
+	printf("play_file: count=%d,next=%p\n", count, audio_data->next);
 	if (!audio_data->next) {
 		fprintf(stderr,"could not allocate %d bytes\n", count);
 		return -1;
@@ -790,7 +789,7 @@ static int play_file(struct audtest_config *config,
 	content_buf = audio_data->next;
 	audio_data->org_next = audio_data->next;
 
-	if (read(fd, audio_data->next, count) != count) {
+	if (read(fd, audio_data->next, count) != (ssize_t) count) {
 		fprintf(stderr,"could not read %d bytes\n", count);
 		free(content_buf);
 		return -1;
@@ -1009,10 +1008,9 @@ static int fill_pcm_buffer(void *buf, unsigned sz, void *cookie)
 {
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cookie;
 	unsigned cpy_size = 0;
-	int ret = 0;
 
 	cpy_size = (sz < audio_data->avail ? sz : audio_data->avail);
-	printf("cpy_size = %d audio_data->next = %d buf = %d\n", cpy_size, audio_data->next, buf);
+	printf("cpy_size = %d audio_data->next = %p buf = %p\n", cpy_size, audio_data->next, buf);
 	if (audio_data->avail == 0)
 		return -1;
 	if (!audio_data->next) {
@@ -1031,7 +1029,7 @@ static int fill_pcm_buffer(void *buf, unsigned sz, void *cookie)
 
 void add_meta_out(char *pcm_buf, int eos, void *config, int buffer_size)
 {
-	unsigned long int duration = 0;
+	unsigned long long duration = 0;
 	struct meta_out metaout;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config;
 	printf("add_meta_out");
@@ -1040,13 +1038,14 @@ void add_meta_out(char *pcm_buf, int eos, void *config, int buffer_size)
 	duration = audio_data->frame_count * ((buffer_size * 1000) /
 				(audio_data->freq * audio_data->channels
 				* NUM_BITS_PER_SAMPLE));
-	printf("duration = %x\n", duration);
+	printf("duration = %llu\n", duration);
 	metaout.ntimestamp.LowPart = duration & 0xFFFFFFFF;
 	metaout.ntimestamp.HighPart = (duration >> 32) & 0xFFFFFFFF;
 	metaout.nflags = eos;
 	metaout.sample_frequency = audio_data->freq;
 	metaout.channel = audio_data->channels;
 	metaout.tick_count = tickcount++;
+	metaout.errflag = 0;
 	memcpy(pcm_buf, &metaout, sizeof(metaout));
 #ifdef DEBUG_LOCAL
 	printf("Meta_out High part is %lu\n",
@@ -1054,45 +1053,40 @@ void add_meta_out(char *pcm_buf, int eos, void *config, int buffer_size)
 	printf("Meta_out Low part is %lu\n",
 				metaout.ntimestamp.LowPart);
 	printf("Meta Out Timestamp: %llu\n",
-				((metaout.ntimestamp.HighPart << 32)
+				(((unsigned long long)metaout.ntimestamp.HighPart << 32)
 				 + metaout.ntimestamp.LowPart));
 #endif
 }
 
-static void aac_nt_enc(void *arg)
+static void *aac_nt_enc(void *arg)
 {
-	struct meta_in meta;
 	struct audtest_config *config = (struct audtest_config *)arg;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *)
 						config->private_data;
 	struct msm_audio_pcm_config pcm_config;
 	int afd = audio_data->afd;
-	unsigned long long *time;
 	char *pcm_buf;
-	int fd, ret_val = 0;
+	int fd;
 	int len, total_len;
-	int eos = 0;
 	struct WAV_header hdr;
 	int ret = 0;
 	int cntW = 0, sz = 0;
-	int n = 0;
-	//  unsigned rate, channels;
-	int pipe_fd[2];
+	unsigned n = 0;
 	int eos_sent = 0;
 	len = 0;
 	total_len = 0;
 
 	if (config == NULL) {
-		return -1;
+		return (void *)-1;
 	}
 	fd = open(config->in_file_name, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "playwav: cannot open '%s'\n", config->in_file_name);
-		return -1;
+		return (void *)-1;
 	}
 	if (read(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 		fprintf(stderr, "playwav: cannot read header\n");
-		return -1;
+		return (void *)-1;
 	}
 	fprintf(stderr,"playwav: %d ch, %d hz, %d bit, %s\n",
 			hdr.num_channels, hdr.sample_rate, hdr.bits_per_sample,
@@ -1102,27 +1096,27 @@ static void aac_nt_enc(void *arg)
 		(hdr.fmt_id != ID_FMT)) {
 		fprintf(stderr, "playwav: '%s' is not a riff/wave file\n",
 		config->in_file_name);
-		return -1;
+		return (void *)-1;
 	}
 	if ((hdr.audio_format != FORMAT_PCM) ||
 		(hdr.fmt_sz != 16)) {
 		fprintf(stderr, "playwav: '%s' is not pcm format\n", config->in_file_name);
-		return -1;
+		return (void *)-1;
 	}
 	if (hdr.bits_per_sample != 16) {
 		fprintf(stderr, "playwav: '%s' is not 16bit per sample\n", config->in_file_name);
-		return -1;
+		return (void *)-1;
 	}
 	audio_data->next = (char*)malloc(hdr.data_sz);
 	audio_data->org_next = audio_data->next;
-	printf(" play_file: count=%d,next=%d\n", hdr.data_sz, audio_data->next);
+	printf(" play_file: count=%d,next=%p\n", hdr.data_sz, audio_data->next);
 	if (!audio_data->next) {
 		fprintf(stderr,"could not allocate %d bytes\n", hdr.data_sz);
-		return -1;
+		return (void *)-1;
 	}
-	if (read(fd, audio_data->next, hdr.data_sz) != hdr.data_sz) {
+	if (read(fd, audio_data->next, hdr.data_sz) != (ssize_t) hdr.data_sz) {
 		fprintf(stderr,"could not read %d bytes\n", hdr.data_sz);
-		return -1;
+		return (void *)-1;
 	}
 	audio_data->avail = hdr.data_sz;
 	audio_data->org_avail = audio_data->avail;
@@ -1149,7 +1143,7 @@ static void aac_nt_enc(void *arg)
 	for (n = 0; n < pcm_config.buffer_count; n++) {
 		if ((sz = fill_pcm_buffer((pcm_buf + sizeof(struct meta_out)), pcm_config.buffer_size - sizeof(struct meta_out), (void *)audio_data)) < 0)
 			break;
-		if (sz < (pcm_config.buffer_size - sizeof(struct meta_out)))
+		if (sz < (signed)(pcm_config.buffer_size - sizeof(struct meta_out)))
 			add_meta_out(pcm_buf, 1, &audio_data, pcm_config.buffer_size);
 		else
 			add_meta_out(pcm_buf, 0, &audio_data, pcm_config.buffer_size);
@@ -1206,7 +1200,7 @@ err_state:
 fail:
 	close(fd);
 	printf("returning from nt encoder function\n");
-	return ret;
+	return (void *)ret;
 }
 
 
@@ -1223,26 +1217,22 @@ struct aac_encoded_meta_in {
 int mode;
 int aac_rec(struct audtest_config *config)
 {
-  unsigned char *buf;
+  unsigned char *buf=NULL;
   struct msm_audio_stream_config stream_cfg;
   struct msm_audio_aac_enc_config aac_enc_cfg;
   struct audio_pvt_data audio_data;
 
-  int sample_idx, loop;
-  unsigned int sz;
+  int sample_idx = 0;
+  unsigned int loop;
   signed int framesize = 0;
-  int out_fd, in_fd, afd;
+  int out_fd, afd;
   unsigned total = 0;
-  unsigned char tmp;
   static unsigned int cnt = 0;
   pthread_t thread;
   struct aac_encoded_meta_in nt_frame;
-  unsigned char *start_buf;
+  unsigned char *start_buf=NULL;
 #ifdef AUDIOV2
   unsigned short enc_id;
-  int device_id;
-  int control = 0;
-  const char *device = "handset_tx";
 #endif
 	mode = config->mode;
 	printf("file_name = %s\n", config->file_name);
@@ -1312,7 +1302,7 @@ int aac_rec(struct audtest_config *config)
     goto fail;
   }
 	printf("Default buffer size %d, buffer count %d\n", stream_cfg.buffer_size, stream_cfg.buffer_count);
-	buf = (char *) malloc(stream_cfg.buffer_size);
+	buf = (unsigned char *) malloc(stream_cfg.buffer_size);
 	if (buf == NULL) {
 		perror("cannot allocate memory for record");
 		goto fail;
@@ -1382,7 +1372,6 @@ int aac_rec(struct audtest_config *config)
     } else
 	rec_stop = 1;
   }
-  done:
   if (config->mode)
    sleep(6);
   printf("\n*** RECORDING * STOPPED ***\n");
@@ -1439,7 +1428,7 @@ static int fill_pcm_buffer_8660(void *buf, unsigned sz, void *cookie)
 
 void add_meta_in_8660(char *pcm_buf, int eos, void *config, int buffer_size)
 {
-	unsigned long int duration = 0;
+	unsigned long long duration = 0;
 	struct meta_in meta;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config;
 	meta.offset = sizeof(struct meta_in);
@@ -1454,35 +1443,30 @@ static void *aac_nt_enc_8660(void *arg)
 {
 	int ret = 0;
 #ifdef AUDIOV2
-	struct meta_in meta;
 	struct audtest_config *config = (struct audtest_config *)arg;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config->private_data;
 	struct msm_audio_config pcm_config;
 	int afd = audio_data->afd;
-	unsigned long long *time;
 	char *pcm_buf;
-	int fd, ret_val = 0;
+	int fd;
 	int len, total_len;
-	int eos = 0;
 	struct WAV_header hdr;
 	int cntW = 0, sz = 0;
-	int n = 0;
-	//  unsigned rate, channels;
 	len = 0;
 	total_len = 0;
 	printf("%s==========>\n", __func__);
 	if (config == NULL) {
-		return -1;
+		return (void *)-1;
 	}
 
 	fd = open(config->in_file_name, O_RDONLY);
 	if (fd < 0) {
 		fprintf(stderr, "playwav: cannot open '%s'\n", config->file_name);
-		return -1;
+		return (void *)-1;
 	}
 	if (read(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 		fprintf(stderr, "playwav: cannot read header\n");
-		return -1;
+		return (void *)-1;
 	}
 	fprintf(stderr,"playwav: %d ch, %d hz, %d bit, %s\n",
 	hdr.num_channels, hdr.sample_rate, hdr.bits_per_sample,
@@ -1493,28 +1477,28 @@ static void *aac_nt_enc_8660(void *arg)
 			(hdr.fmt_id != ID_FMT)) {
 		fprintf(stderr, "playwav: '%s' is not a riff/wave file\n", 
 		config->in_file_name);
-		return -1;
+		return (void *)-1;
 	}
 	if ((hdr.audio_format != FORMAT_PCM) ||
 			(hdr.fmt_sz != 16)) {
 		fprintf(stderr, "playwav: '%s' is not pcm format\n", config->file_name);
-		return -1;
+		return (void *)-1;
 	}
 	if (hdr.bits_per_sample != 16) {
 		fprintf(stderr, "playwav: '%s' is not 16bit per sample\n", config->file_name);
-		return -1;
+		return (void *)-1;
 	}
 
 	audio_data->next = (char*)malloc(hdr.data_sz);
 	audio_data->org_next = audio_data->next;
-	printf(" play_file: count=%d,next=%d\n", hdr.data_sz, audio_data->next);
+	printf(" play_file: count=%d,next=%p\n", hdr.data_sz, audio_data->next);
 	if (!audio_data->next) {
 		fprintf(stderr,"could not allocate %d bytes\n", hdr.data_sz);
-		return -1;
+		return (void *)-1;
 	}
-	if (read(fd, audio_data->next, hdr.data_sz) != hdr.data_sz) {
+	if (read(fd, audio_data->next, hdr.data_sz) != (ssize_t)hdr.data_sz) {
 		fprintf(stderr,"could not read %d bytes\n", hdr.data_sz);
-		return -1;
+		return (void *)-1;
 	}
 	audio_data->avail = hdr.data_sz;
 	audio_data->org_avail = audio_data->avail;
@@ -1553,7 +1537,7 @@ static void *aac_nt_enc_8660(void *arg)
 		if (sz > 0) {
 
 			add_meta_in_8660(pcm_buf, 0, &audio_data, pcm_config.buffer_size);
-			if (write(afd, pcm_buf, (sz + sizeof(struct meta_in)) ) != 
+			if (write(afd, pcm_buf, (sz + sizeof(struct meta_in)) ) != (ssize_t)
 					(sz + sizeof(struct meta_in))) { 
 				printf(" write return not equal to sz, exit loop\n");
 				break;
@@ -1577,10 +1561,9 @@ static void *aac_nt_enc_8660(void *arg)
 	sleep(5); 
 	free(pcm_buf);
 err_state:
-fail:
 	close(fd);
 #endif //AUDIOV2
-	return ret;
+	return (void *)ret;
 }
 
 
@@ -1588,8 +1571,7 @@ int aac_rec_8660(struct audtest_config *config)
 {
 #ifdef AUDIOV2
 	unsigned char *buf;
-	unsigned char *start_buf;
-	unsigned char *pcm_buf;
+	unsigned char *start_buf = NULL;
 	struct enc_meta_out_8660 *meta = NULL;
 
 	uint32_t format = config->fmt_config.aac.format_type; 
@@ -1602,18 +1584,15 @@ int aac_rec_8660(struct audtest_config *config)
 	struct msm_audio_config pcm_cfg;
 
 	struct audio_pvt_data audio_data;
-	int sample_idx, loop;
-	unsigned sz ,framesize = 0;
-	int out_fd, in_fd, afd;
+	int sample_idx=0;
+	unsigned loop;
+	unsigned framesize = 0;
+	int out_fd, afd;
 	unsigned total = 0;
-	unsigned char tmp;
 	static unsigned int cnt = 0;
 	pthread_t thread;
 	int offset = 0;
 	unsigned short enc_id;
-	int device_id;
-	int control = 0;
-	const char *device = "handset_tx";
 	mode = config->mode;
 	printf("file_name = %s\n", config->file_name);
 	out_fd = open(config->file_name, O_CREAT | O_RDWR, 0666);
@@ -1672,7 +1651,7 @@ int aac_rec_8660(struct audtest_config *config)
 	}
 
 	printf("Default buffer size %d, buffer count %d\n", stream_cfg.buffer_size, stream_cfg.buffer_count);
-	buf = (char *) malloc(stream_cfg.buffer_size);
+	buf = (unsigned char *) malloc(stream_cfg.buffer_size);
 	if (buf == NULL) {
 		perror("cannot allocate memory for record");
 		goto fail;
@@ -1775,7 +1754,7 @@ int aac_rec_8660(struct audtest_config *config)
 				write(out_fd,audaac_header,AUDAAC_MAX_ADTS_HEADER_LENGTH);
 				total += AUDAAC_MAX_ADTS_HEADER_LENGTH;
 			}
-			if((write(out_fd, (start_buf +sizeof(unsigned char) + meta->offset_to_frame) , len)) != len) {
+			if((write(out_fd, (start_buf +sizeof(unsigned char) + meta->offset_to_frame) , len)) != (ssize_t)len) {
 				perror("cannot write buffer");
 				goto fail;
 			}
@@ -1786,7 +1765,6 @@ int aac_rec_8660(struct audtest_config *config)
 		}
 
 	}
-done:
 	printf("\n*** RECORDING * STOPPED **total encoded bytes rxed[%d]\n", total);
 	close(afd);
 

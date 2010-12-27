@@ -61,7 +61,7 @@ static struct wav_header append_header = {
 typedef struct TIMESTAMP{
 	unsigned long LowPart;
 	unsigned long HighPart;
-} TIMESTAMP __attribute__ ((packed));
+} __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in{
 	unsigned short offset;
@@ -139,7 +139,7 @@ static void *wmapro_dec(void *arg)
 		} else if (len != 0) {
 			memcpy(&meta, audio_data->recbuf,
 					sizeof(struct meta_out));
-			time = (unsigned long long)(audio_data->recbuf + 2);
+			time = (unsigned long long *)(audio_data->recbuf + 2);
 			meta.ntimestamp.LowPart = (*time & 0xFFFFFFFF);
 			meta.ntimestamp.HighPart = ((*time >> 32) & 0xFFFFFFFF);
 			#ifdef DEBUG_LOCAL
@@ -148,7 +148,7 @@ static void *wmapro_dec(void *arg)
 			printf("Meta_out Low part is %lu\n",
 					meta.ntimestamp.LowPart);
 			printf("Meta Out Timestamp: %llu\n",
-					((meta.ntimestamp.HighPart << 32)
+					(((unsigned long long)meta.ntimestamp.HighPart << 32)
 					 + meta.ntimestamp.LowPart));
 			#endif
 			if (meta.nflags == EOS) {
@@ -218,7 +218,7 @@ static void *event_notify(void *arg)
 static int wmapro_start(struct audtest_config *clnt_config)
 {
 	int fd, afd, ii, count, ret, pkts_size, size;
-	int i, retval = 0;
+	int retval = 0;
 	pthread_t thread, event_th;
 	static struct msm_audio_config config;
 	static struct msm_audio_wmapro_config wmapro_config;
@@ -228,7 +228,6 @@ static int wmapro_start(struct audtest_config *clnt_config)
 		(struct audio_pvt_data *) clnt_config->private_data;
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	/* Open the file for operation */
@@ -254,7 +253,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 		goto file_err;
 	}
 	/* Store handle for commands */
-	audio_data->afd = (void *)afd;
+	audio_data->afd = afd;
 
 #ifdef AUDIOV2
 	if (!audio_data->mode) {
@@ -399,7 +398,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 				printf("Meta In Low part is %lu\n",
 						meta.ntimestamp.LowPart);
 				printf("Meta In ntimestamp: %llu\n",
-					((unsigned long long)(meta.ntimestamp.HighPart
+					(((unsigned long long)meta.ntimestamp.HighPart
 						<< 32) + meta.ntimestamp.LowPart));
 				#endif
 				memcpy(transcodebuf, &meta, sizeof(struct meta_in));
@@ -460,7 +459,7 @@ static int wmapro_start(struct audtest_config *clnt_config)
 		printf("Meta In Low part is %lu\n",
 				meta.ntimestamp.LowPart);
 		printf("Meta In ntimestamp: %llu\n",
-				((meta.ntimestamp.HighPart << 32)
+				(((unsigned long long)meta.ntimestamp.HighPart << 32)
 				 + meta.ntimestamp.LowPart));
 		#endif
 		memset(transcodebuf, 0,

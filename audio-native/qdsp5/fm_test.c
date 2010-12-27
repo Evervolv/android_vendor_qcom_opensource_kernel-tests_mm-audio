@@ -49,7 +49,7 @@ int fm_play(struct audtest_config *cfg)
 		return -1;
 	}
 
-	cfg->private_data = afd;
+	cfg->private_data = (void *)afd;
 #ifdef AUDIOV2
 	if (ioctl(afd, AUDIO_GET_SESSION_ID, &dec_id)) {
 		perror("could not get decoder session id\n");
@@ -88,7 +88,6 @@ int fm_play(struct audtest_config *cfg)
 	} else {
 		printf("fm_play: Unable to start driver\n");
 	}
-err_state:
 #if defined(QC_PROP) && defined(AUDIOV2)
 	if (msm_en_device(fm_devid_rx, 0) < 0) {
 		perror("could not disable device\n");

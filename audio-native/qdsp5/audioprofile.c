@@ -47,7 +47,6 @@ static const char *cmdfile = "/tmp/audio_test";
 
 int profile_read_params(void)
 {
-	struct audiotest_thread_context *context;
 	char buf[100];
 	int ret_val = 0, sz, op = 0,i;
 	int afd, decafd[NUMBER_DECODER_SUPPORTED], decfdcnt;
@@ -116,11 +115,11 @@ err:
 
 int profile_control_handler(void *private_data)
 {
-	int drvfd , ret_val = 0;
-	int volume = 8192; /* Default volume */
-	char *token;
+	/* Below statement for warning removal
+	   to keep prototype intact */
+	(void)private_data;
 	/* Nothing to do */
-	return ret_val;
+	return 0;
 }
 
 const char *profile_help_txt = "Select/Read audio profile: \n\

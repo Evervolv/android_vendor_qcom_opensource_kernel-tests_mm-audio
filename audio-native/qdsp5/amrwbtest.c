@@ -203,7 +203,6 @@ static int initiate_play(struct audtest_config *clnt_config,
 
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	if (audio_data->mode)
@@ -428,7 +427,7 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 		printf("Meta In timestamp: %lld\n", meta.timestamp);
 		#endif
 		memcpy(buf, &meta, sizeof(struct meta_in));
-		memcpy((buf + sizeof(struct meta_in)), audio_data->next,
+		memcpy(((char *)buf + sizeof(struct meta_in)), audio_data->next,
 				cpy_size);
 	} else
 		memcpy(buf, audio_data->next, cpy_size);

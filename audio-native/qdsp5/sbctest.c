@@ -49,11 +49,10 @@ int sbc_rec(struct audtest_config *config)
 	unsigned sz;
 	int fd, afd;
 	unsigned total = 0;
-	unsigned char tmp;
 	unsigned short enc_id;
 	const char *device = "a2dp_tx";
 	int device_id;
-	unsigned int batch_size;
+	size_t batch_size;
 	int rc = -1;
 
 	if (sbc_data->mode > 3) {
@@ -165,7 +164,7 @@ int sbc_rec(struct audtest_config *config)
 	while(!rec_stop) {
 		batch_size = read(afd, buf, sz);
 		printf("batch_size = %d\n", batch_size);
-		if (write(fd, buf, batch_size) != batch_size) {
+		if (write(fd, buf, batch_size) != (ssize_t)batch_size) {
 			perror("cannot write buffer");
 			goto fail;
 		}

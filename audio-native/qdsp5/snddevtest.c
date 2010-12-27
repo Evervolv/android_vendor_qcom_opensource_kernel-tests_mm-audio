@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,9 +81,12 @@ static int snd_set_device_test(struct snd_dev_config *clnt_config )
 	int methIndex = 0;
         int afd;
 
+	/* Below statement to remove warning for unused variable clnt_config,
+	   but to keep function prototype intact */
+	(void)clnt_config;
         afd = open(SND_DEVICE_NODE, O_RDWR);
         if (afd < 0) {
-                printf("Unable to open audio device = %s \n", SND_DEVICE_NODE);
+                printf("Unable to open audio device = %s\n", SND_DEVICE_NODE);
                 goto device_err;
         }
         devIndex = get_device(sndConfig.devIndex);

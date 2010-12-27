@@ -267,7 +267,9 @@ static void *event_notify(void *arg)
 static int qcp_start(struct audtest_config *clnt_config)
 {
 	int fd, afd, ret;
-	int ii, jj, count, inc, pkts_per_buffer, pkts_size, rate;
+	int jj, count, pkts_per_buffer, pkts_size, rate;
+	unsigned ii;
+	int inc = 0;
 	pthread_t thread, event_th;
 	struct type_size ts[8];
 	struct qcp_header *qcpheader = NULL;
@@ -283,7 +285,6 @@ static int qcp_start(struct audtest_config *clnt_config)
 
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	/* Open the file for operation */
@@ -535,7 +536,7 @@ static int qcp_start(struct audtest_config *clnt_config)
 				if (jj == pkts_per_buffer) {
 					#ifdef DEBUG_LOCAL
 					printf("writing %d no of packets\n", jj);
-					printf("Data1 %d =  %d, Data2 %d = %d \n",
+					printf("Data1 %d =  %p, Data2 %d = %p \n",
 					       transcodebuf[0], &transcodebuf[0],
 					       transcodebuf[1], &transcodebuf[1]);
 					#endif

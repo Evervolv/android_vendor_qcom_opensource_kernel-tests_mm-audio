@@ -212,9 +212,6 @@ void audiotest_cmd_svr(void) {
 	int fd;
 	ssize_t read_count;
 	char *token;
-#ifdef AUDIOV2
-	int control = 0;
-#endif
 #ifdef _ANDROID_
 	if (mknod("/data/audio_test", S_IFIFO | 0666, 0) == 0) {
 		fd = open("/data/audio_test", O_RDONLY);

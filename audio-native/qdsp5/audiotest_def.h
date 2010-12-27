@@ -148,4 +148,16 @@ typedef void (*case_deinit)(void);
 /* Thread context management functions  */
 struct audiotest_thread_context* get_free_context(void);
 void free_context(struct audiotest_thread_context *context);
+
+#if defined(QC_PROP) && defined(AUDIOV2)
+/* Device manager functions */
+void audiotest_init_devmgr(void);
+void audiotest_deinit_devmgr(void);
+
+int devmgr_register_session(unsigned short, unsigned short);
+int devmgr_unregister_session(unsigned short, unsigned short);
+
+int devmgr_enable_device(int, unsigned short);
+int devmgr_disable_device(int, unsigned short);
+#endif
 #endif /* AUDIOTEST_DEFS_H */

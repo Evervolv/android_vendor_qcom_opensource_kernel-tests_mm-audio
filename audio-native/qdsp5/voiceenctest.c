@@ -129,7 +129,7 @@ static uint8_t amrnb_pkt_size[8] = {0x0c, 0x0d, 0x0f, 0x11, 0x13, 0x20, 0x1a, 0x
 typedef struct TIMESTAMP{
 	unsigned long LowPart;
 	unsigned long HighPart;
-} TIMESTAMP __attribute__ ((packed));
+} __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in{
 	unsigned short offset;
@@ -262,12 +262,12 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 				meta.ntimestamp.HighPart);
 		printf("Meta In Low part is %lu\n",
 				meta.ntimestamp.LowPart);
-		printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
-					(meta.ntimestamp.HighPart << 32) +
+		printf("Meta In ntimestamp: %llu\n", (((unsigned long long)
+					meta.ntimestamp.HighPart << 32) +
 					meta.ntimestamp.LowPart));
 		#endif
 		memcpy(buf, &meta, sizeof(struct meta_in));
-		memcpy((buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+		memcpy(((char *)buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
 	} else
 
 		memcpy(buf, audio_data->next, cpy_size);
@@ -281,19 +281,19 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 		return cpy_size;
 }
 
-static void *voiceenc_nt(struct audtest_config *clnt_config)
+static void *voiceenc_nt(void *arg)
 {
+	struct audtest_config *clnt_config= (struct audtest_config *)arg;
 	struct meta_in meta;
 	struct stat stat_buf;
 	char *content_buf;
 	int fd, ret_val = 0;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
 	int afd = audio_data->afd;
-	unsigned long long *time;
 	int len, total_len;
 	len = 0;
 	total_len = 0;
-	unsigned buffer_size;
+	size_t buffer_size;
 	struct wav_header hdr;
         struct msm_audio_config config_pcm;
 
@@ -314,7 +314,7 @@ static void *voiceenc_nt(struct audtest_config *clnt_config)
 	printf("voiceenc_nt: %d ch, %d hz, 0x%4x bit\n",
 			hdr.Number_Channels, hdr.Sample_rate, hdr.Significant_Bits_sample);
 
-	printf("Total file size: %d\n", stat_buf.st_size);
+	printf("Total file size: %lld\n", stat_buf.st_size);
 	buffer_size = stat_buf.st_size - sizeof(hdr);
 
 	if (ioctl(afd, AUDIO_GET_CONFIG, &config_pcm)) {
@@ -358,7 +358,7 @@ static void *voiceenc_nt(struct audtest_config *clnt_config)
         audio_data->recsize = audio_data->recsize - sizeof(struct meta_in);
 	ioctl(afd, AUDIO_START, 0);
 	audio_data->next = (char*)malloc(buffer_size);
-	printf("Total file PCM len: %d,next=%d\n", buffer_size, (int) audio_data->next);
+	printf("Total file PCM len: %d,next=%p\n", buffer_size, audio_data->next);
 
 	if (!audio_data->next) {
                 fprintf(stderr,"could not allocate %d bytes\n", buffer_size);
@@ -370,7 +370,7 @@ static void *voiceenc_nt(struct audtest_config *clnt_config)
 	audio_data->org_next = audio_data->next;
 	content_buf = audio_data->org_next;
 
-	if (read(fd, audio_data->next, buffer_size) != buffer_size) {
+	if (read(fd, audio_data->next, buffer_size) != (ssize_t)buffer_size) {
 		fprintf(stderr,"could not read %d bytes\n", buffer_size);
 		goto fail;
 	}
@@ -407,8 +407,7 @@ fail:
 
 static int voiceenc_start(struct audtest_config *clnt_config)
 {
-	int afd, fd, dfd=0;
-	unsigned char tmp;
+	int afd, fd;
         unsigned char buf[1024];
         unsigned sz;
 	int readcnt,writecnt;
@@ -416,9 +415,6 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	struct msm_audio_stats stats;
 	int datasize=0, framecnt=0;
 	unsigned short enc_id;
-	int device_id = 0;
-	int control = 0;
-	const char *device = "handset_tx";
 	memset(&stats,0,sizeof(stats));
 	memset(&cfg,0,sizeof(cfg));
 
@@ -585,7 +581,7 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 					} else
 						printf("Unexpected frame\n");
 				} else if(rec_type == 3) {
-					if (buf[1] <= 7 || buf[1] >=0) {
+					if (buf[1] <= 7) {
 						readcnt = amrnb_pkt_size[buf[1]] + 1;
 						memptr = &buf[1];
 						printf("0x%2x, %d\n", buf[1], readcnt);
@@ -602,7 +598,6 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		framecnt++;
 		datasize += writecnt;
         }
-done:
 	ioctl(afd, AUDIO_GET_STATS, &stats);
 	printf("\n read_bytes = %d, read_frame_counts = %d\n",datasize, framecnt);
 	ioctl(afd, AUDIO_STOP, 0);
@@ -634,8 +629,7 @@ file_err:
 
 static int voiceenc_start_8660(struct audtest_config *clnt_config)
 {
-	int afd, fd, dfd=0;
-	unsigned char tmp;
+	int afd, fd;
         unsigned char buf[1024];
         unsigned sz;
 	int readcnt,writecnt;
@@ -785,7 +779,7 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 		printf("rec source = 0x%8x\n", rec_source);
 	}
 	/* Store handle for commands pass*/
-	audio_data->afd = (void *) afd;
+	audio_data->afd = afd;
 	sz = cfg.buffer_size;
         if (clnt_config->mode) {
                	/* non - tunnel portion for 8660 */
@@ -824,7 +818,7 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 			meta_enc = (struct meta_out_enc *)memptr;
 			nr_of_frames = meta_enc->num_of_frames;
 			meta = (struct meta_out *) (memptr + sizeof(meta_enc->num_of_frames));
-			printf("meta = 0x%8x meta_enc = 0x%8x\n", meta, meta_enc);
+			printf("meta = 0x%p meta_enc = 0x%p\n", meta, meta_enc);
 			printf("Read cnt = %d\n", readcnt);
 			printf("number of frames = 0x%2x\n", nr_of_frames);
 			while(nr_of_frames > 0) {
@@ -847,7 +841,7 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 				framecnt++;
 				datasize += writecnt;
 				meta++;
-				printf("meta = 0x%8x\n", meta);
+				printf("meta = 0x%p\n", meta);
 				printf(" frame cnt = %d\n", framecnt);
 				nr_of_frames --;
                 	}
@@ -892,7 +886,7 @@ void *voiceenc_thread(void *arg)
 {
 	struct audiotest_thread_context *context =
 	    (struct audiotest_thread_context *)arg;
-	int ret_val;
+	int ret_val = 0;
 
 	if(context->config.tgt == 0x07)
 		ret_val = voiceenc_start(&context->config);

@@ -272,12 +272,11 @@ struct eq_filter eq[MAX_PRESETS][MAX_BAND_COUNT] = {
         },
 };
 
+#ifdef QDSP6V2
 int set_pcm_default_eq_values(int fd, int preset)
 {
         int rc = 0;
-#ifdef QDSP6V2
         struct msm_audio_eq_stream_config eq_cfg;
-        int band_count = 0;
         int band_id = 0;
 
         printf("EQUALIZER PRESET: %d\n", preset);
@@ -303,6 +302,6 @@ int set_pcm_default_eq_values(int fd, int preset)
                 perror("could not set eq params");
                 rc = -1;
         }
-#endif
         return rc;
 }
+#endif

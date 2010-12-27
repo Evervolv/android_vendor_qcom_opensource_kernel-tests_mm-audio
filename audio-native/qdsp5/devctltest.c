@@ -53,7 +53,7 @@ static int devmgr_sid_count_rx = 0;
 static int devmgr_sid_count_tx = 0;
 
 const char *devctl_help_text =
-"\n\Device Control Help: MAINLY USED FOR SWITCHING THE AUDIO DEVICE.	\n\
+"\nDevice Control Help: MAINLY USED FOR SWITCHING THE AUDIO DEVICE.	\n\
 All Active playbacks will be routed to Device mentioned in this        \n\
 command. Device IDs are generated dynamically from the driver.		\n\
 Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
@@ -258,7 +258,7 @@ void audiotest_deinit_devmgr(void)
 void audiotest_init_devmgr(void)
 {
 
-	int i, alsa_ctl, dev_cnt, device_id, dev_dest;
+	int i, alsa_ctl, device_id, dev_cnt;
 	const char **device_names;
 	const char *def_device_rx = "handset_rx";
 	const char *def_device_tx = "handset_tx";
@@ -297,7 +297,7 @@ int devmgr_devctl_handler()
 {
 
 	char *token;
-	int ret_val = 0, sid, dev_cnt, dev_source, dev_dest, index, dev_id,
+	int ret_val = 0, sid, dev_source, dev_dest, index, dev_id,
 		txdev_id, rxdev_id;
 
 	token = strtok(NULL, " ");

@@ -30,7 +30,6 @@
 #include <sys/ioctl.h>
 #include <linux/msm_audio.h>
 #include <errno.h>
-static int prefill_buffer(void *buf, unsigned sz, void *cookie);
 #define MP3TEST_BUFSZ 250000	//153600, 524288
 #define MP3TEST_NUM_BUF 4
 
@@ -45,7 +44,7 @@ struct pmem_buf {
 typedef struct TIMESTAMP {
 	unsigned long LowPart;
 	unsigned long HighPart;
-} TIMESTAMP __attribute__ ((packed));
+} __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in {
 	unsigned short offset;
@@ -64,7 +63,6 @@ struct meta_out {
 } __attribute__ ((packed));
 
 static struct pmem_buf data_buf[4];
-static char *recbuf;
 /* static int start_dec; */
 static pthread_mutex_t avail_lock;
 static pthread_cond_t avail_cond;
@@ -72,12 +70,10 @@ static pthread_mutex_t consumed_lock;
 static pthread_cond_t consumed_cond;
 static int data_is_available = 0;
 static int data_is_consumed = 0;
-static int pcm_sourced = 0;
+static unsigned int pcm_sourced = 0;
 
 static int in_free_cnt;
 static int eof = 0;
-static int recsize;
-static char *recbuf;
 static int complete_close;
 
 static void wait_for_data(void)
@@ -99,47 +95,6 @@ void data_available(void)
 		pthread_cond_broadcast(&avail_cond);
 	}
 	pthread_mutex_unlock(&avail_lock);
-}
-
-static void wait_for_data_consumed(void)
-{
-	pthread_mutex_lock(&consumed_lock);
-
-	while (data_is_consumed == 0) {
-		pthread_cond_wait(&consumed_cond, &consumed_lock);
-	}
-	data_is_consumed = 0;
-	pthread_mutex_unlock(&consumed_lock);
-}
-
-void data_consumed(void)
-{
-	pthread_mutex_lock(&consumed_lock);
-	if (data_is_consumed == 0) {
-		data_is_consumed = 1;
-		pthread_cond_broadcast(&consumed_cond);
-	}
-	pthread_mutex_unlock(&consumed_lock);
-}
-
-static char *next;
-static unsigned avail;
-static char *orig_next;
-static unsigned orig_avail;
-
-static int prefill_buffer(void *buf, unsigned sz, void *cookie)
-{
-	unsigned cpy_size = (sz < avail ? sz : avail);
-
-	if (avail == 0) {
-		return -1;
-	}
-
-	memcpy(buf, next, cpy_size);
-	next += cpy_size;
-	avail -= cpy_size;
-
-	return cpy_size;
 }
 
 static int fill_buffer(void *buf, unsigned sz, void *cookie)
@@ -167,13 +122,13 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 #ifdef DEBUG_LOCAL
 	printf("Meta In High part is %lu\n", meta.ntimestamp.HighPart);
 	printf("Meta In Low part is %lu\n", meta.ntimestamp.LowPart);
-	printf("Meta In ntimestamp: %llu\n", ((unsigned long long)
-					      (meta.ntimestamp.
+	printf("Meta In ntimestamp: %llu\n", (((unsigned long long)
+					      meta.ntimestamp.
 					       HighPart << 32) +
 					      meta.ntimestamp.LowPart));
 #endif
 	memcpy(buf, &meta, sizeof(struct meta_in));
-	memcpy((buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+	memcpy(((char*)buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
 
 	audio_data->next += cpy_size;
 	audio_data->avail -= cpy_size;
@@ -185,7 +140,6 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 static void *lpa_dec(void *arg)
 {
 	struct meta_out meta;
-	int fd, ret_val = 0;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *)arg;
 	int afd = audio_data->afd;
 	int ntfd = audio_data->ntfd;
@@ -227,7 +181,7 @@ static void *lpa_dec(void *arg)
 			memcpy(&meta, audio_data->recbuf,
 			       sizeof(struct meta_out));
 			time =
-			    (unsigned long long)(audio_data->recbuf + 2);
+			    (unsigned long long *)(audio_data->recbuf + 2);
 			meta.ntimestamp.LowPart = (*time & 0xFFFFFFFF);
 			meta.ntimestamp.HighPart =
 			    ((*time >> 32) & 0xFFFFFFFF);
@@ -237,7 +191,7 @@ static void *lpa_dec(void *arg)
 			printf("Meta_out Low part is %lu\n",
 			       meta.ntimestamp.LowPart);
 			printf("Meta Out Timestamp: %llu\n",
-			       ((meta.ntimestamp.HighPart << 32)
+			       (((unsigned long long)meta.ntimestamp.HighPart << 32)
 				+ meta.ntimestamp.LowPart));
 #endif
 			if (meta.nflags == EOS) {
@@ -250,7 +204,7 @@ static void *lpa_dec(void *arg)
 			pcm_sourced += len;
 			//              printf("len=%d, in_free_cnt=%d\n", len, in_free_cnt);
 			if (len > 0) {
-				memcpy((data_buf[index].pbuf.buf_addr +
+				memcpy(((char*)data_buf[index].pbuf.buf_addr +
 					total_len),
 				       (audio_data->recbuf +
 					sizeof(struct meta_out)), len);
@@ -263,7 +217,7 @@ static void *lpa_dec(void *arg)
 					data_buf[index].pbuf.data_len =
 					    total_len;
 #ifdef DEBUG_LOCAL
-					printf("pbuf.buf_addr %d\n",
+					printf("pbuf.buf_addr %p\n",
 					       data_buf[index].pbuf.
 					       buf_addr);
 					printf
@@ -300,7 +254,7 @@ static void *lpa_dec(void *arg)
 					data_buf[index].pbuf.data_len =
 					    total_len;
 #ifdef DEBUG_LOCAL
-					printf("pbuf.buf_addr %d\n",
+					printf("pbuf.buf_addr %p\n",
 					       data_buf[index].pbuf.
 					       buf_addr);
 					printf
@@ -337,7 +291,7 @@ static void *lpa_dec(void *arg)
 					data_buf[index].pbuf.data_len =
 					    total_len;
 #ifdef DEBUG_LOCAL
-					printf("pbuf.buf_addr %d\n",
+					printf("pbuf.buf_addr %p\n",
 					       data_buf[index].pbuf.
 					       buf_addr);
 					printf
@@ -473,11 +427,7 @@ static void *lpa_event(void *arg)
 {
 	int rc;
 	struct msm_audio_event event;
-	struct msm_audio_aio_buf *aio_buf;
 	event.timeout_ms = 0;
-	int sz, eos = 0;
-	int fd = 0;
-	int len, total_len;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *)arg;
 	int afd = audio_data->afd;
 	int pcm_consumed = 0;
@@ -492,7 +442,7 @@ static void *lpa_event(void *arg)
 			rc = ioctl(afd, AUDIO_GET_EVENT, &event);
 #ifdef DEBUG_LOCAL
 			printf
-			    (" event.event_payload.aio_buf.buf_addr = %d\n",
+			    ("event.event_payload.aio_buf.buf_addr = %p\n",
 			     event.event_payload.aio_buf.buf_addr);
 #endif
 			if (rc < 0) {
@@ -556,20 +506,17 @@ static int initiate_play(struct audtest_config *clnt_config,
 {
 	struct msm_audio_config config;
 	struct msm_audio_config lpa_config;
-	// struct msm_audio_stats stats;
 	unsigned n = 0;
 	pthread_t thread;
 	pthread_t evt_thread1, evt_thread2;
-	pthread_t pdec_thread;
 	int sz;
 	int rc;
 	char *buf;
-	int afd, ntfd, pdfd, ipmem_fd[MP3TEST_NUM_BUF], used = 0;
+	int afd, ntfd, ipmem_fd[MP3TEST_NUM_BUF];
 	int cntW = 0;
 	void *pmem_ptr[MP3TEST_NUM_BUF];
 	struct msm_audio_pmem_info pmem_info;
 	unsigned short dec_id = 0;
-	int control = 0;
 	struct audio_pvt_data *audio_data =
 	    (struct audio_pvt_data *)clnt_config->private_data;
 
@@ -701,7 +648,6 @@ static int initiate_play(struct audtest_config *clnt_config,
 			return -1;
 		}
 		if ((ioctl(afd, AUDIO_START, 0)) >= 0) {
-			struct msm_audio_aio_buf aio_buf;
 			fprintf(stderr, "register pmem\n");
 			for (n = 0; n < MP3TEST_NUM_BUF; n++) {
 				ipmem_fd[n] =
@@ -712,7 +658,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 				    mmap(0, MP3TEST_BUFSZ,
 					 PROT_READ | PROT_WRITE,
 					 MAP_SHARED, ipmem_fd[n], 0);
-				printf("%s:pmem_ptr[n] =%x\n", __func__,
+				printf("%s:pmem_ptr[n] =%p\n", __func__,
 				       pmem_ptr[n]);
 				pmem_info.fd = ipmem_fd[n];
 				pmem_info.vaddr = pmem_ptr[n];
@@ -763,7 +709,7 @@ static int initiate_play(struct audtest_config *clnt_config,
 				printf("Meta In Low part is %lu\n",
 				       meta.ntimestamp.LowPart);
 				printf("Meta In ntimestamp: %llu\n",
-				       ((meta.ntimestamp.HighPart << 32)
+				       (((unsigned long long)meta.ntimestamp.HighPart << 32)
 					+ meta.ntimestamp.LowPart));
 #endif
 				memset(buf, 0,
@@ -824,7 +770,7 @@ err_state:
 
 /* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
 
-int play_file(struct audtest_config *config, int fd, unsigned count)
+int play_file(struct audtest_config *config, int fd, size_t count)
 {
 	struct audio_pvt_data *audio_data =
 	    (struct audio_pvt_data *)config->private_data;
@@ -833,8 +779,8 @@ int play_file(struct audtest_config *config, int fd, unsigned count)
 	char *content_buf;
 
 	audio_data->next = (char *)malloc(count);
-	printf(" play_file: count=%d,next=%d\n", count,
-	       (int)audio_data->next);
+	printf(" play_file: count=%d,next=%p\n", count,
+	       audio_data->next);
 	if (!audio_data->next) {
 		fprintf(stderr, "could not allocate %d bytes\n", count);
 		return -1;
@@ -845,7 +791,7 @@ int play_file(struct audtest_config *config, int fd, unsigned count)
 
 	printf(" play_file: count=%d,next=%d\n", count,
 	       (int)audio_data->next);
-	if (read(fd, audio_data->next, count) != count) {
+	if (read(fd, audio_data->next, count) != (ssize_t)count) {
 		fprintf(stderr, "could not read %d bytes\n", count);
 		free(content_buf);
 		return -1;

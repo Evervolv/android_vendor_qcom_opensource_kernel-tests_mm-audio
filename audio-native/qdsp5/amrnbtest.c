@@ -208,7 +208,6 @@ static int initiate_play(struct audtest_config *clnt_config,
 
 #ifdef AUDIOV2
 	unsigned short dec_id;
-	int control = 0;
 #endif
 
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
@@ -431,7 +430,7 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 		printf("Meta In timestamp: %lld\n", meta.timestamp);
 		#endif
 		memcpy(buf, &meta, sizeof(struct meta_in));
-		memcpy((buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+		memcpy(((char *)buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
 	} else
 		memcpy(buf, audio_data->next, cpy_size);
 
@@ -445,7 +444,7 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 }
 
 static int play_file(struct audtest_config *config, 
-					 int fd, unsigned count)
+					 int fd, size_t count)
 {
         struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config->private_data;
 	int ret_val = 0;
@@ -453,7 +452,7 @@ static int play_file(struct audtest_config *config,
 
 	audio_data->next = (char*)malloc(count);
 
-	printf(" play_file: count=%d,next=%d\n", count, (int) audio_data->next);
+	printf(" play_file: count=%d,next=%p\n", count, audio_data->next);
 
 	if (!audio_data->next) {
 		fprintf(stderr,"could not allocate %d bytes\n", count);
@@ -463,7 +462,7 @@ static int play_file(struct audtest_config *config,
 	audio_data->org_next = audio_data->next;
 	content_buf = audio_data->org_next;
 
-	if (read(fd, audio_data->next, count) != count) {
+	if (read(fd, audio_data->next, count) != (ssize_t)count) {
 		fprintf(stderr,"could not read %d bytes\n", count);
 		free(content_buf);
 		return -1;
@@ -578,11 +577,11 @@ int amrnb_rec(struct audtest_config *config)
 		while (read(0, &tmp, 1) == 1) {
 			if ((tmp == 13) || (tmp == 10)) goto done;
 		}
-		if (read(afd, buf, sz) != sz) {
+		if (read(afd, buf, sz) != (ssize_t)sz) {
 			perror("cannot read buffer");
 			goto fail;
 		}
-		if (write(fd, buf, sz) != sz) {
+		if (write(fd, buf, sz) != (ssize_t)sz) {
 			perror("cannot write buffer");
 			goto fail;
 		}
