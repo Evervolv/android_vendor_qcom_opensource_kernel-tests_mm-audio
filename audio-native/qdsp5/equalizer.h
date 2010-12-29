@@ -30,13 +30,13 @@
 #define MAX_BAND_COUNT	12
 
 enum equalizers {
+    NONE,
     BASS_BOOST,
     BASS_CUT,
-    BAND_BOOST,
-    BAND_CUT,
     TREBLE_BOOST,
     TREBLE_CUT,
-    NONE,
+    BAND_BOOST,
+    BAND_CUT,
 };
 
 enum eq_presets {
