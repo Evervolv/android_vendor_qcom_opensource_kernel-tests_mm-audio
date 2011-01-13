@@ -39,7 +39,6 @@ include $(CLEAR_VARS)
 ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
 endif
-mm-audio-native-inc     += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 
 LOCAL_MODULE            := mm-audio-native-test
 LOCAL_CFLAGS            := $(mm-audio-native-def)
