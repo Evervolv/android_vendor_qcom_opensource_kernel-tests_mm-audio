@@ -36,6 +36,7 @@ endif
 
 include $(CLEAR_VARS)
 
+mm-audio-native-inc     := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
 ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
@@ -47,8 +48,9 @@ LOCAL_MODULE            := mm-audio-native-test
 LOCAL_CFLAGS            := $(mm-audio-native-def)
 LOCAL_PRELINK_MODULE    := false
 
-ifeq ($(strip $(QC_PROP)),true)
 LOCAL_C_INCLUDES        := $(mm-audio-native-inc)
+LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_HEADERS_INSTALL)
+ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SHARED_LIBRARIES  := libaudioalsa
 ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
 LOCAL_SHARED_LIBRARIES	+= libacdbloader
