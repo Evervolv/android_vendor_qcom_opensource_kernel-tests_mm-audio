@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,53 @@
 #include "audiotest_def.h"
 #include "equalizer.h"
 
+#define DUAL_MIC_SOURCE		4
+#define FRAME_NUM	128
+
 const char     *dev_file_name;
 static char *next, *org_next;
 static unsigned avail, org_avail;
 static int quit, repeat;
 static int rec_source;
+int rec_stop = 1;
 
-#define DUAL_MIC_SOURCE		4
+struct audiot_buf_config {
+	char    	*buf;
+	uint32_t	head; /* next buffer app will write */
+	uint32_t	tail; /* next buffer read() will read */
+	int      	fd;
+	int      	frame_available;
+	int      	buffer_size; /* pcm min buffer size */
+	uint32_t 	frame_count; /* total number of frames read */
+	pthread_mutex_t cond_lock;
+	pthread_mutex_t cmpl_lock;
+	pthread_mutex_t lock;
+	pthread_cond_t  cond;
+	pthread_t 	thread;
+};
+
+void wait_for_frame(struct audiot_buf_config *buf_cfg)
+{
+	pthread_mutex_lock(&buf_cfg->cond_lock);
+	while (!buf_cfg->frame_available && !rec_stop ) {
+		pthread_cond_wait(&buf_cfg->cond, &buf_cfg->cond_lock);
+	}
+	buf_cfg->frame_count--;
+	if(!buf_cfg->frame_count)
+		buf_cfg->frame_available = 0;
+	pthread_mutex_unlock(&buf_cfg->cond_lock);
+}
+
+void frame_available(struct audiot_buf_config *buf_cfg)
+{
+	pthread_mutex_lock(&buf_cfg->cond_lock);
+	if(buf_cfg->frame_available == 0) {
+		buf_cfg->frame_available = 1;
+	}
+	buf_cfg->frame_count++;
+	pthread_cond_signal(&buf_cfg->cond);
+	pthread_mutex_unlock(&buf_cfg->cond_lock);
+}
 
 static int pcm_play(struct audtest_config *cfg, unsigned rate, 
 					unsigned channels, int (*fill)(void *buf, 
@@ -270,17 +310,42 @@ int wav_play(struct audtest_config *config)
 					 fd, hdr.data_sz);
 }
 
-int rec_stop = 1;
+
+void* pcmwrite_thread(void *arg)
+{
+	struct audiot_buf_config *buf_cfg = (struct audiot_buf_config *)arg;
+	while(!rec_stop)
+	{
+		wait_for_frame(buf_cfg);
+		if (write(buf_cfg->fd,
+			&buf_cfg->buf[buf_cfg->tail * buf_cfg->buffer_size],
+			buf_cfg->buffer_size) != (ssize_t)buf_cfg->buffer_size) {
+			perror("cannot write buffer");
+			pthread_mutex_unlock(&buf_cfg->cmpl_lock);
+			return NULL;
+		}
+		pthread_mutex_lock(&buf_cfg->lock);
+		buf_cfg->tail = (buf_cfg->tail + 1) & (FRAME_NUM - 1);
+		pthread_mutex_unlock(&buf_cfg->lock);
+
+	}
+	pthread_mutex_unlock(&buf_cfg->cmpl_lock);
+	return NULL;
+
+}
 
 int wav_rec(struct audtest_config *config)
 {
 
 	struct wav_header hdr;
-	unsigned char buf[8192];
+	char *buf;
 	struct msm_audio_config cfg;
+	struct audiot_buf_config *buf_cfg;
 	unsigned sz; //n;
 	int fd, afd;
 	unsigned total = 0;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *)
+						config->private_data;
 #ifdef AUDIOV2
 	unsigned short enc_id;
 	int device_id=-1;
@@ -386,31 +451,54 @@ int wav_rec(struct audtest_config *config)
 		}
 	}
 #endif
-	config->private_data = (void*) afd;
 
 	if (ioctl(afd, AUDIO_GET_CONFIG, &cfg)) {
 		perror("cannot read audio config");
 		goto fail;
 	}
-
+	fprintf(stderr,"rec_buf_size = %d\n", audio_data->recsize);
+	cfg.buffer_size = audio_data->recsize;
 	cfg.channel_count = hdr.num_channels;
 	cfg.sample_rate = hdr.sample_rate;
+
+	sz = cfg.buffer_size;
+	if (sz > (cfg.buffer_size * FRAME_NUM)) {
+		fprintf(stderr, "buffer size %d too large\n", sz);
+		goto fail;
+	}
+	if (sz < 160) {
+		fprintf(stderr, "buffer size %d is small\n", sz);
+		goto fail;
+	}
+
 	if (ioctl(afd, AUDIO_SET_CONFIG, &cfg)) {
 		perror("cannot write audio config");
 		goto fail;
 	}
-
-	if (ioctl(afd, AUDIO_GET_CONFIG, &cfg)) {
-		perror("cannot read audio config");
+	buf_cfg = (struct audiot_buf_config *)malloc(sizeof(struct audiot_buf_config));
+	if(buf_cfg == NULL)	{
+		fprintf(stderr,"\n buffer allocation failed \n");
 		goto fail;
 	}
 
-	sz = cfg.buffer_size;
-	fprintf(stderr, "buffer size %d\n", sz);
-	if (sz > sizeof(buf)) {
-		fprintf(stderr, "buffer size %d too large\n", sz);
+	memset(buf_cfg,0,sizeof(struct audiot_buf_config));
+
+	buf_cfg->buf =(char *)malloc(cfg.buffer_size * FRAME_NUM);
+	if(buf_cfg->buf == NULL) {
+
+		fprintf(stderr,"\n buffer allocation failed \n");
 		goto fail;
 	}
+	rec_stop = 0;
+	buf_cfg->buffer_size = sz;
+	buf_cfg->fd = fd;
+	buf = buf_cfg->buf;
+	pthread_cond_init(&buf_cfg->cond, 0);
+	pthread_mutex_init(&buf_cfg->cond_lock, 0);
+	pthread_mutex_init(&buf_cfg->cmpl_lock, 0);
+	pthread_mutex_init(&buf_cfg->lock, 0);
+	pthread_create( &buf_cfg->thread, NULL,
+			pcmwrite_thread, (void*) buf_cfg);
 
 #ifdef AUDIOV2
 	/* Record form voice link */
@@ -428,22 +516,38 @@ int wav_rec(struct audtest_config *config)
 		perror("cannot start audio");
 		goto fail;
 	}
-	rec_stop = 0;
 	fprintf(stderr,"\n*** RECORDING IN PROGRESS ***\n");
-
 	while(!rec_stop) {
-		if (read(afd, buf, sz) != (ssize_t)sz) {
+		if (read(afd, &buf[buf_cfg->head * sz], sz) != (ssize_t)sz) {
 			perror("cannot read buffer");
+			rec_stop = 1;
+			frame_available(buf_cfg);
 			goto done;
 		}
-		if (write(fd, buf, sz) != (ssize_t)sz) {
-			perror("cannot write buffer");
-			goto fail;
+
+		pthread_mutex_lock(&buf_cfg->lock);
+		buf_cfg->head = (buf_cfg->head + 1) & (FRAME_NUM - 1);
+
+		/* If overflow, move the tail index foward. */
+		if (buf_cfg->head == buf_cfg->tail)
+		{
+			buf_cfg->tail = (buf_cfg->tail + 1) & (FRAME_NUM - 1);
+			fprintf(stderr,"\n***BUFFER OVERFLOW***");
+			rec_stop = 1;
+			pthread_mutex_unlock(&buf_cfg->lock);
+
+			frame_available(buf_cfg);
+			goto done;
 		}
+		pthread_mutex_unlock(&buf_cfg->lock);
+
+		frame_available(buf_cfg);
 		total += sz;
 	}
 	done:
 	close(afd);
+	/* wait for pcm writer thread to exit */
+	pthread_mutex_lock(&buf_cfg->cmpl_lock);
 
 	/* update lengths in header */
 	hdr.data_sz = total;
@@ -451,6 +555,10 @@ int wav_rec(struct audtest_config *config)
 	lseek(fd, 0, SEEK_SET);
 	write(fd, &hdr, sizeof(hdr));
 	close(fd);
+	pthread_cond_destroy(&buf_cfg->cond);
+	pthread_mutex_destroy(&buf_cfg->cond_lock);
+	pthread_mutex_destroy(&buf_cfg->lock);
+	pthread_mutex_destroy(&buf_cfg->cmpl_lock);
 #ifdef AUDIOV2
 	if(!a2dp_set) {
 		printf("Derouting from non A2DP\n");
@@ -581,31 +689,46 @@ int pcmrec_read_params(void) {
 		context->config.channel_mode = 1;  
 		context->type = AUDIOTEST_TEST_MOD_PCM_ENC;
 		rec_source = 3;
-		token = strtok(NULL, " ");
+		struct audio_pvt_data *audio_data;
+		audio_data = (struct audio_pvt_data *)
+				malloc(sizeof(struct audio_pvt_data));
 
-		while (token != NULL) {
-			printf("%s \n", token);
-			if (!memcmp(token,"-rate=", (sizeof("-rate=") - 1))) {
-				context->config.sample_rate = 
-				atoi(&token[sizeof("-rate=") - 1]);
-			} else if (!memcmp(token,"-cmode=", (sizeof("-cmode=") - 1))) {
-				context->config.channel_mode = 
-				atoi(&token[sizeof("-cmode=") - 1]);
-			} else if (!memcmp(token,"-id=", (sizeof("-id=") - 1))) {
-				context->cxt_id = atoi(&token[sizeof("-id=") - 1]);
-			} else if (!memcmp(token, "-dev=",
-					(sizeof("-dev=") - 1))) {
-				dev_file_name = token + (sizeof("-dev=")-1);
-			} else if (!memcmp(token, "-src=", (sizeof("-src=") - 1))) {
-				rec_source = atoi(&token[sizeof("-src=") - 1]);
-			} else {
-				context->config.file_name = token;
+		if(!audio_data) {
+			printf("error allocating audio instance structure \n");
+			free_context(context);
+			ret_val = -1;
+		} else {
+
+			audio_data->recsize = 2048;
+			token = strtok(NULL, " ");
+			while (token != NULL) {
+				printf("%s \n", token);
+				if (!memcmp(token,"-rate=", (sizeof("-rate=") - 1))) {
+					context->config.sample_rate =
+						atoi(&token[sizeof("-rate=") - 1]);
+				} else if (!memcmp(token,"-cmode=", (sizeof("-cmode=") - 1))) {
+					context->config.channel_mode =
+						atoi(&token[sizeof("-cmode=") - 1]);
+				} else if (!memcmp(token,"-recbufsize=", (sizeof("-recbufsize=") - 1))) {
+					audio_data->recsize = atoi(&token[sizeof("-recbufsize=") - 1]);
+				} else if (!memcmp(token,"-id=", (sizeof("-id=") - 1))) {
+					context->cxt_id = atoi(&token[sizeof("-id=") - 1]);
+				} else if (!memcmp(token, "-dev=",
+								   (sizeof("-dev=") - 1))) {
+					dev_file_name = token + (sizeof("-dev=")-1);
+				} else if (!memcmp(token, "-src=", (sizeof("-src=") - 1))) {
+					rec_source = atoi(&token[sizeof("-src=") - 1]);
+				} else {
+					context->config.file_name = token;
+				}
+				token = strtok(NULL, " ");
 			}
-			token = strtok(NULL, " ");  
-		}
-		printf("%s : sample_rate=%d channel_mode=%d\n", __FUNCTION__, 
-			   context->config.sample_rate, context->config.channel_mode);
+			context->config.private_data = (struct audio_pvt_data *) audio_data;
+			printf("%s:sample_rate=%d channel_mode=%d, recbufsize = %d\n", __FUNCTION__,
+				   context->config.sample_rate, context->config.channel_mode,
+				  audio_data->recsize);
 		pthread_create( &context->thread, NULL, recpcm_thread, (void*) context);  
+	}
 	}
 
 	return ret_val;
@@ -731,10 +854,12 @@ void pcmplay_help_menu(void) {
 
 const char *pcmrec_help_txt = 
 "Record pcm file: type \n\
-echo \"recpcm path_of_file -rate=xxx -cmode=x -id=xxx -src=x -dev=/dev/msm_pcm_in or msm_a2dp_in\" > tmp/audio_test \n\
+echo \"recpcm path_of_file -rate=xxx -cmode=x -recbufsize=x -id=xxx -src=x -dev=/dev/msm_pcm_in or msm_a2dp_in\" > tmp/audio_test \n\
 sample rate: 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000 \n\
 src: 0 - Uplink 1 - Downlink, 2 - UL/DL, 3 - Mic 4 - Dual MIC\n\
 channel mode: 1 or 2 \n\
+recbufsize(recording buffer size): value greater than 160 and a multiple of 4 for 8k, default is 2048 \n\
+                                   (512,1024 or 2048) * channel mode for 7x30, default is 2048 \n\
 Supported control command: stop\n ";
 
 void pcmrec_help_menu(void) {
