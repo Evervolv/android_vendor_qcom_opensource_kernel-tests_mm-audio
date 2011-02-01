@@ -37,6 +37,8 @@ static unsigned avail, org_avail;
 static int quit, repeat;
 static int rec_source;
 
+#define DUAL_MIC_SOURCE		4
+
 static int pcm_play(struct audtest_config *cfg, unsigned rate, 
 					unsigned channels, int (*fill)(void *buf, 
 												   unsigned sz, void *cookie), void *cookie)
@@ -370,6 +372,14 @@ int wav_rec(struct audtest_config *config)
 		}
 		if (msm_route_stream(DIR_TX, enc_id, device_id, 1) < 0) {
 			perror("could not route stream to Device\n");
+			if (devmgr_disable_device(device_id, DIR_RX) < 0)
+				perror("could not disable device\n");
+			return -1;
+		}
+	}
+	if (rec_source == DUAL_MIC_SOURCE) {
+		if (msm_set_dual_mic_config(enc_id, 1) < 0) {
+			perror("could not set dual mic config\n");
 			if (devmgr_disable_device(device_id, DIR_RX) < 0)
 				perror("could not disable device\n");
 			return -1;
@@ -723,7 +733,7 @@ const char *pcmrec_help_txt =
 "Record pcm file: type \n\
 echo \"recpcm path_of_file -rate=xxx -cmode=x -id=xxx -src=x -dev=/dev/msm_pcm_in or msm_a2dp_in\" > tmp/audio_test \n\
 sample rate: 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000 \n\
-src: 0 - Uplink 1 - Downlink, 2 - UL/DL, 3 - Mic \n\
+src: 0 - Uplink 1 - Downlink, 2 - UL/DL, 3 - Mic 4 - Dual MIC\n\
 channel mode: 1 or 2 \n\
 Supported control command: stop\n ";
 
