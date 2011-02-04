@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,6 +105,12 @@ void lpaplay_help_menu(void);
 /* Dev Control Test Module definition */
 int devctl_read_params(void);
 void devctl_help_menu(void);
+
+#ifdef QDSP6V2
+int hdmi_ac3_read_params(void);
+void hdmi_ac3_help_menu(void);
+#endif
+
 #endif
 
 /* FM Playback Test Module definition */
@@ -116,7 +122,8 @@ void fm_play_help_menu(void);
 int sbcrec_read_params(void);
 int sbc_rec_control_handler(void* private_data);
 void sbcrec_help_menu(void);
-#endif
+
+#endif /* AUDIOV2 */
 
 #ifdef QDSP6V2
 /* MVS Test Module Interface Definition */

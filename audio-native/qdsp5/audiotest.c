@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,7 @@ struct audiotest_case_type audiotest_case_list[] = {
 	{ "devctl", devctl_read_params, devctl_help_menu, NULL },
 #ifdef QDSP6V2
         { "mvstest", mvstest_read_params, mvstest_help_menu, NULL } ,
+	{ "hdmi_ac3",hdmi_ac3_read_params,hdmi_ac3_help_menu, NULL },
 #endif
 #endif
 	{ "playfm", fm_play_read_params, fm_play_help_menu, NULL },
