@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,6 +111,7 @@ static int dtx_mode;
 static int min_rate;
 static int max_rate;
 static int rec_source;
+static int eos_sent = false;
 
 static struct msm_audio_evrc_enc_config evrccfg;
 static struct msm_audio_qcelp_enc_config qcelpcfg;
@@ -146,10 +147,36 @@ struct meta_out{
         unsigned nflags;
 }__attribute__ ((packed));
 
+
 struct meta_out_enc{
 	unsigned char num_of_frames;
 	struct meta_out meta_out_dsp[];
 }__attribute__ ((packed));
+
+#define NUM_BYTES_PER_SAMPLE	2
+
+struct meta_in_7k{
+	unsigned short offset;
+	uint16_t time_stamp_dword_lsw;
+	uint16_t time_stamp_dword_msw;
+	uint16_t time_stamp_lsw;
+	uint16_t time_stamp_msw;
+	unsigned int nflags;
+	unsigned short errflag;
+	unsigned short sample_frequency;
+	unsigned short channel;
+	unsigned int tick_count;
+} __attribute__ ((packed));
+
+struct meta_out_7k{
+	uint16_t metadata_len;
+	uint16_t time_stamp_dword_lsw;
+	uint16_t time_stamp_dword_msw;
+	uint16_t time_stamp_lsw;
+	uint16_t time_stamp_msw;
+	uint16_t nflag_lsw;
+	uint16_t nflag_msw;
+};
 
 static void create_qcp_header(int Datasize, int Frames)
 {
@@ -280,6 +307,179 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 	} else
 		return cpy_size;
 }
+int  add_meta_in(char *buf, int eos, void *config, int buffer_size)
+{
+	static uint64_t duration = 0;
+	struct meta_in_7k  metain;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) config;
+	memset(&metain,0, sizeof(metain));
+	metain.offset = sizeof(metain);
+	if(eos)
+		duration = 0;
+	printf("duration = %llu\n", duration);
+	metain.time_stamp_dword_lsw = (duration >> 32) & 0x0000FFFF;
+	metain.time_stamp_dword_msw = ((duration >> 32) & 0xFFFF0000) >> 16;
+	metain.time_stamp_lsw = duration & 0x0000FFFF;
+	metain.time_stamp_msw = (duration & 0xFFFF0000) >> 16;
+	metain.nflags = eos;
+	metain.sample_frequency = audio_data->freq;
+	metain.channel = audio_data->channels;
+	metain.tick_count = audio_data->frame_count;
+	metain.errflag = 0;
+	memcpy(buf, &metain, sizeof(metain));
+	audio_data->frame_count++;
+#ifdef DEBUG_LOCAL
+	printf(" dmswts = %x dlswts = %x\n", metain.time_stamp_dword_msw, metain.time_stamp_dword_lsw);
+	printf(" mswts = %x lswts = %x\n", metain.time_stamp_msw,metain.time_stamp_lsw);
+#endif
+	if (!eos)
+		duration += (1000 * ((buffer_size * 1000  ) /
+				(audio_data->freq * audio_data->channels
+				 * NUM_BYTES_PER_SAMPLE)));
+
+	return (sizeof(metain));
+}
+static int fill_buffer_7k(void *buf, unsigned sz, void *cookie)
+{
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cookie;
+	unsigned cpy_size = 0;
+	unsigned meta_size = 0;
+
+	if (sz == 0) {
+		return -1;
+	}
+	cpy_size = (sz < audio_data->avail ? sz : audio_data->avail);
+	printf("cpy_size = %d audio_data->next = %p buf = %p\n", cpy_size, audio_data->next, buf);
+	if (!audio_data->next) {
+		printf("error in next buffer returning with out copying\n");
+		return -1;
+	}
+	if (!eos_sent) {
+		if(audio_data->avail == 0){
+			eos_sent = 1;
+		}
+		meta_size = add_meta_in(buf, eos_sent, audio_data, cpy_size);
+	}
+	else {
+		return -1;
+	}
+
+	if(cpy_size) {
+		memcpy((char *)buf + meta_size, audio_data->next, cpy_size);
+		audio_data->next += cpy_size;
+		audio_data->avail -= cpy_size;
+	}
+	return (cpy_size + meta_size);
+}
+
+static void *voiceenc_nt_7k(void *arg)
+{
+	struct audtest_config *clnt_config= (struct audtest_config *)arg;
+	struct meta_in meta;
+	struct stat stat_buf;
+	char *content_buf;
+	int fd, ret_val = 0;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
+	int afd = audio_data->afd;
+	int len, total_len;
+	len = 0;
+	total_len = 0;
+	size_t buffer_size;
+	struct wav_header hdr;
+        struct msm_audio_config config_pcm;
+	eos_sent = 0;
+
+	printf("voiceenc pcm write Thread\n");
+	fd = open(clnt_config->in_file_name, O_RDONLY);
+	if (fd < 0) {
+		printf("Err while opening PCM file for encoder \
+			: %s\n", clnt_config->in_file_name);
+		pthread_exit((void *)ret_val);
+	}
+	(void) fstat(fd, &stat_buf);
+	if (read(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
+		printf("Cannot read file header\n");
+		close(fd);
+		pthread_exit((void *)ret_val);
+	}
+	printf("voiceenc_nt: %d ch, %d hz, 0x%4x bit\n",
+			hdr.Number_Channels, hdr.Sample_rate, hdr.Significant_Bits_sample);
+
+	printf("Total file size: %lld\n", stat_buf.st_size);
+	buffer_size = stat_buf.st_size - sizeof(hdr);
+
+	if (ioctl(afd, AUDIO_GET_CONFIG, &config_pcm)) {
+		printf("Error getting AUDIO_GET_CONFIG\n");
+		close(fd);
+		pthread_exit((void *)ret_val);
+	}
+	printf("Default: config_pcm.buffer_count = %d , \
+			config_pcm.buffer_size=%d \n", \
+			config_pcm.buffer_count, config_pcm.buffer_size);
+
+	audio_data->recsize = config_pcm.buffer_size;
+	/*7k  voice encode only supports 8k mono */
+	audio_data->freq = 8000;
+	audio_data->channels = 1;
+
+	audio_data->recbuf = (char *)malloc(audio_data->recsize);
+	if (!audio_data->recbuf) {
+	printf("could not allocate memory for pcm buffer\n");
+		close(fd);
+		pthread_exit((void *)ret_val);
+	}
+	memset(audio_data->recbuf, 0, audio_data->recsize);
+
+	printf("Set: config_pcm.buffer_count = %d , \
+			config_pcm.buffer_size=%d \n, \
+			config_pcm.sample_rate=%d \n, \
+			config_pcm.channel_count=%d \n", \
+			config_pcm.buffer_count, config_pcm.buffer_size,
+			config_pcm.sample_rate,config_pcm.channel_count);
+
+	/* set back to witohut meta as the buffer corresponding to PCM */
+        audio_data->recsize = audio_data->recsize - sizeof(struct meta_in_7k);
+	audio_data->next = (char*)malloc(buffer_size);
+	ioctl(afd, AUDIO_START, 0);
+	printf("Total file PCM len: %d,next=%p\n", buffer_size, audio_data->next);
+
+	if (!audio_data->next) {
+                fprintf(stderr,"could not allocate %d bytes\n", buffer_size);
+		close(fd);
+		free(audio_data->recbuf);
+		pthread_exit((void *)ret_val);
+        }
+
+	audio_data->org_next = audio_data->next;
+	content_buf = audio_data->org_next;
+	if (read(fd, audio_data->next, buffer_size) != (ssize_t)buffer_size) {
+		fprintf(stderr,"could not read %d bytes\n", buffer_size);
+		goto fail;
+	}
+	audio_data->avail = stat_buf.st_size;
+	audio_data->org_avail = audio_data->avail;
+	while (1) {
+		len = fill_buffer_7k(
+				audio_data->recbuf,
+				audio_data->recsize,
+				(void *)audio_data);
+		printf("sz = %d\n", len);
+		if (len < 0) {
+			printf("end of file reached \n");
+			break;
+		} else {
+			printf("fill buffer size = %d \n", len);
+			len = write(afd, audio_data->recbuf, len);
+		}
+	}
+fail:
+	close(fd);
+	free(content_buf);
+	free(audio_data->recbuf);
+	pthread_exit((void *)ret_val);
+	return NULL;
+}
+
 
 static void *voiceenc_nt(void *arg)
 {
@@ -338,13 +538,15 @@ static void *voiceenc_nt(void *arg)
 		pthread_exit((void *)ret_val);
 	}
         memset(audio_data->recbuf, 0, audio_data->recsize);
-        if (ioctl(afd, AUDIO_SET_CONFIG, &config_pcm)) {
-                printf("could not set PCM config\n");
+
+	if (ioctl(afd, AUDIO_SET_CONFIG, &config_pcm)) {
+		printf("could not set PCM config\n");
 		close(fd);
 		free(audio_data->recbuf);
 		pthread_exit((void *)ret_val);
 	}
-        if (ioctl(afd, AUDIO_GET_CONFIG, &config_pcm)) {
+
+	if (ioctl(afd, AUDIO_GET_CONFIG, &config_pcm)) {
                 printf("Error getting AUDIO_GET_PCM_CONFIG\n");
 		close(fd);
 		free(audio_data->recbuf);
@@ -369,12 +571,10 @@ static void *voiceenc_nt(void *arg)
 
 	audio_data->org_next = audio_data->next;
 	content_buf = audio_data->org_next;
-
 	if (read(fd, audio_data->next, buffer_size) != (ssize_t)buffer_size) {
 		fprintf(stderr,"could not read %d bytes\n", buffer_size);
 		goto fail;
 	}
-
 	audio_data->avail = stat_buf.st_size;
 	audio_data->org_avail = audio_data->avail;
 	do {
@@ -410,11 +610,13 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	int afd, fd;
         unsigned char buf[1024];
         unsigned sz;
-	int readcnt,writecnt;
+	int readcnt,writecnt,open_flags;
 	struct msm_audio_stream_config cfg;
 	struct msm_audio_stats stats;
 	int datasize=0, framecnt=0;
 	unsigned short enc_id;
+	pthread_t thread;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
 	memset(&stats,0,sizeof(stats));
 	memset(&cfg,0,sizeof(cfg));
 
@@ -428,13 +630,18 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	else
 		printf("file created =%s\n",clnt_config->file_name);
 
+	if (clnt_config->mode)
+		open_flags = O_RDWR;
+	else
+		open_flags = O_RDONLY;
+
 	/* Open Device 	Node */
 	if (rec_type == 1) {
-		afd = open(QCELP_DEVICE_NODE, O_RDONLY);
+		afd = open(QCELP_DEVICE_NODE, open_flags);
 	} else if (rec_type == 2) {
-		afd = open(EVRC_DEVICE_NODE, O_RDONLY);
+		afd = open(EVRC_DEVICE_NODE, open_flags);
 	} else if (rec_type == 3) {
-		afd = open(AMRNB_DEVICE_NODE, O_RDONLY);
+		afd = open(AMRNB_DEVICE_NODE, open_flags);
 	} else
 		goto device_err;
 
@@ -451,10 +658,11 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		close(afd);
 		return -1;
 	}
-
-	if (devmgr_register_session(enc_id, DIR_TX) < 0) {
-		close(afd);
-		goto fail;
+	if (!clnt_config->mode) {
+		if (devmgr_register_session(enc_id, DIR_TX) < 0) {
+			close(afd);
+			goto fail;
+		}
 	}
 
 	/* Config param */
@@ -537,10 +745,14 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	}
 
 	/* Store handle for commands pass*/
-	clnt_config->private_data = (void *) afd;
+	audio_data->afd = afd;
 	sz = cfg.buffer_size;
 
-	ioctl(afd, AUDIO_START, 0);
+	if (clnt_config->mode) {
+		/* non - tunnel portion for 7k */
+		pthread_create(&thread, NULL, voiceenc_nt_7k, (void *)clnt_config);
+	} else
+		ioctl(afd, AUDIO_START, 0);
 
 	printf("Voice encoder started 7k\n");
 
@@ -555,46 +767,73 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	while(!rec_stop) {
 		memset(buf,0,sz);
 		readcnt = read(afd, buf, sz);
-                if (readcnt <= 0) {
-                        printf("cannot read buffer error code =0x%8x", readcnt);
+		if (readcnt <= 0) {
+			printf("cannot read buffer error code =0x%8x", readcnt);
 			goto fail;
-                }
+		}
 		else
 		{
 			unsigned char *memptr = buf;
+			int metasize = 0;
 			printf("read cnt %d\n",readcnt);
+
+			if(clnt_config->mode)
+			{
+				struct meta_out_7k meta_out;
+				metasize = sizeof(struct meta_out_7k);
+				memcpy(&meta_out, buf, metasize);
+				memptr += metasize;
+		#ifdef DEBUG_LOCAL
+				printf(" dmswts = %x dlswts = %x\n",
+					metain.time_stamp_dword_msw,
+					metain.time_stamp_dword_lsw);
+				printf(" mswts = %x lswts = %x\n",
+					meta_out.time_stamp_msw,
+					meta_out.time_stamp_lsw);
+				printf("nflags_lsw = %d, nflags_msw = %d\n",
+					meta_out.nflag_lsw,
+					meta_out.nflag_msw);
+		#endif
+				readcnt -= metasize;
+				if(meta_out.nflag_lsw & 0x1)
+				{
+					printf("output eos received \n");
+					break;
+				}
+
+			}
 			/* QCP Format */
 			if( frame_format == 1) {
 				// logic for qcp generation
 				if (rec_type ==  1) {
-					if (buf[1] <= 4 || buf[1] >=1) {
-						readcnt = qcelp_pkt_size[buf[1]] + 1;
-						memptr = &buf[1];
-						printf("0x%2x, %d\n", buf[1], readcnt);
+					if (buf[metasize+1] <= 4 || buf[metasize+1] >=1) {
+						readcnt = qcelp_pkt_size[buf[metasize+1]] + 1;
+						memptr = &buf[metasize+1];
+						printf("0x%2x, %d\n", buf[metasize+1], readcnt);
 					} else
 						printf("Unexpected frame\n");
 				} else if(rec_type == 2) {
-					if ((buf[1] <= 4 || buf[1] >=1) && (buf[1] != 2)) {
-						readcnt = evrc_pkt_size[buf[1]] + 1;
-						memptr = &buf[1];
-						printf("0x%2x, %d\n", buf[1], readcnt);
+					if ((buf[metasize+1] <= 4 || buf[metasize+1] >=1) && (buf[metasize+1] != 2)) {
+						readcnt = evrc_pkt_size[buf[metasize+1]] + 1;
+						memptr = &buf[metasize+1];
+						printf("0x%2x, %d\n", buf[metasize+1], readcnt);
 					} else
 						printf("Unexpected frame\n");
 				} else if(rec_type == 3) {
-					if (buf[1] <= 7) {
-						readcnt = amrnb_pkt_size[buf[1]] + 1;
-						memptr = &buf[1];
-						printf("0x%2x, %d\n", buf[1], readcnt);
+					if (buf[metasize+1] <= 7) {
+						readcnt = amrnb_pkt_size[buf[metasize+1]] + 1;
+						memptr = &buf[metasize+1];
+						printf("0x%2x, %d\n", buf[metasize+1], readcnt);
 					} else
 						printf("Unexpected frame\n");
-				 }
+				}
 			}
 			writecnt = write(fd, memptr, readcnt);
 			if (writecnt <= 0) {
 				printf("cannot write buffer error code =0x%8x", writecnt);
 				goto fail;
 			}
-                }
+		}
 		framecnt++;
 		datasize += writecnt;
         }
@@ -610,15 +849,19 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	printf("Secondary encoder stopped \n");
 	close(afd);
 
-	if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
-		perror("\ncould not unregister recording session\n");
+	if (!clnt_config->mode) {
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+			perror("\ncould not unregister recording session\n");
+		}
 	}
 	return 0;
 fail:
 	close(afd);
 
-	if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
-		perror("\ncould not unregister recording session\n");
+	if (!clnt_config->mode) {
+		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
+			perror("\ncould not unregister recording session\n");
+		}
 	}
 device_err:
 	close(fd);
