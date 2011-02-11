@@ -54,6 +54,7 @@ ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SHARED_LIBRARIES  := libaudioalsa
 ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
 LOCAL_SHARED_LIBRARIES	+= libacdbloader
+LOCAL_SHARED_LIBRARIES  += libacdbmapper
 endif
 endif
 

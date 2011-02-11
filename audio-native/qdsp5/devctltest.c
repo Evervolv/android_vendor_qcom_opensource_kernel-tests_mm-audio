@@ -38,6 +38,7 @@
 
 #ifdef QDSP6V2
 #include "acdb-loader.h"
+#include "acdb-id-mapper.h"
 #endif
 
 #ifdef AUDIOV2
@@ -68,8 +69,13 @@ command. Device IDs are generated dynamically from the driver.		\n\
 Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
        echo \"devctl -cmd=dev_switch_tx -dev_id=x\" > /data/audio_test	\n\
        For making voice loopback from application side:-	    	\n\
-	To start a voice call, input these commands:		    	\n\
-        echo \"devctl -cmd=voice_route -txdev_id=x -rxdev_id=y\" >  	\n\
+	To start a voice call, input these commands:		    	\n"
+#ifdef QDSP6V2
+"	To load voice acdb                                             \n\
+	echo \"devctl -cmd=load_voice_acdb -txdev_id=x -rxdev_id=y\" >  \n\
+	/data/audio_test                                                \n"
+#endif
+"   echo \"devctl -cmd=voice_route -txdev_id=x -rxdev_id=y\" >  	\n\
 	/data/audio_test					    	\n\
 	echo \"devctl -cmd=enable_dev -dev_id=x\" > /data/audio_test	\n\
 	echo \"devctl -cmd=enable_dev -dev_id=y\" > /data/audio_test	\n\
@@ -321,6 +327,7 @@ int devmgr_devctl_handler()
 #ifdef QDSP6V2
 	char *anc_device = "anc_headset_stereo_rx";
 	int device = 0;
+	int txdev_acdb_id, rxdev_acdb_id;
 #endif
 	token = strtok(NULL, " ");
 
@@ -563,6 +570,39 @@ int devmgr_devctl_handler()
 				device = msm_get_device(anc_device);
 				ret_val = msm_enable_anc(device, 0);
 				printf("Returned from disabling anc %d\n", ret_val);
+			} else if (!strcmp(token, "load_voice_acdb")) {
+				token = strtok(NULL, " ");
+                                if (!memcmp(token, "-txdev_id=", (sizeof
+                                                        ("-txdev_id=") - 1))) {
+                                        txdev_id = atoi(&token[sizeof
+                                                        ("-txdev_id=") - 1]);
+                                        token = strtok(NULL, " ");
+                                        if (!memcmp(token, "-rxdev_id=",
+                                                (sizeof("-rxdev_id=") - 1))) {
+                                                rxdev_id = atoi(&token[sizeof
+                                                        ("-rxdev_id=") - 1]);
+						if (!acdb_init_count) {
+							ret_val = acdb_loader_init_ACDB();
+							if (ret_val) {
+								printf("Error %d: ACDB init failed\n", ret_val);
+								return ret_val;
+							}
+							acdb_init_count++;
+						}
+						ret_val = acdb_mapper_get_acdb_id_from_dev_id(txdev_id, &txdev_acdb_id);
+						if (ret_val) {
+							printf("Error %d: Get ACDB id failed.\n", ret_val);
+							return ret_val;
+						} else {
+							ret_val = acdb_mapper_get_acdb_id_from_dev_id(rxdev_id, &rxdev_acdb_id);
+							if (ret_val) {
+								printf("Error %d: Get ACDB id failed.\n", ret_val);
+								return ret_val;
+							}
+						}
+						acdb_loader_send_voice_cal(txdev_acdb_id, rxdev_acdb_id);
+                                        }
+                                }
 			}
 #endif
 			else {
