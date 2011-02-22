@@ -57,8 +57,9 @@
 #define AUDIOTEST_TEST_MOD_FM_DEC     17
 #define AUDIOTEST_TEST_MOD_LPA     18
 #define AUDIOTEST_TEST_MOD_SBC_ENC 19
+#define AUDIOTEST_TEST_MODE_MVS_LP 20
 /* If added new module, need to update this number */
-#define AUDIOTEST_MAX_TEST_MOD 20
+#define AUDIOTEST_MAX_TEST_MOD 21
 
 #define DIR_RX 1
 #define DIR_TX 2
@@ -126,6 +127,15 @@ struct audio_pvt_data {
   int advancedencodeopt2;
 };
 
+#ifdef QDSP6V2
+struct mvs_pvt_data {
+ int g_mvs_mode;
+ int g_rate_type;
+ int g_rx_devid;
+ int g_tx_devid;
+};
+#endif
+
 struct audiotest_thread_context {
 	int                     cxt_id;	/* specify by the client */
 	pthread_t               thread;
@@ -159,5 +169,10 @@ int devmgr_unregister_session(unsigned short, unsigned short);
 
 int devmgr_enable_device(int, unsigned short);
 int devmgr_disable_device(int, unsigned short);
+
+#ifdef QDSP6V2
+int devmgr_enable_voice_device(int, int);
+int devmgr_disable_voice_device(void);
+#endif
 #endif
 #endif /* AUDIOTEST_DEFS_H */

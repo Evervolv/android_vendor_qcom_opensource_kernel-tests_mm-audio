@@ -126,9 +126,14 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 	adpcm_play_control_handler, voiceenc_control_handler,
 	NULL, fm_play_control_handler, lpa_play_control_handler,
 	sbc_rec_control_handler,
+#ifdef defined(QC_PROP) && defined(QDSP6V2)
+	mvs_lp_test_control_handler,
+#else
+	NULL,
+#endif
 #else
 	NULL, NULL, NULL, NULL, NULL,
-	NULL,
+	NULL, NULL,
 #endif
 };
 
@@ -188,6 +193,9 @@ struct audiotest_case_type audiotest_case_list[] = {
 	{ "voiceenc", voiceenc_read_params, voiceenc_help_menu, NULL } ,
 #if defined(QC_PROP)
 	{ "devctl", devctl_read_params, devctl_help_menu, NULL },
+#ifdef QDSP6V2
+        { "mvstest", mvstest_read_params, mvstest_help_menu, NULL } ,
+#endif
 #endif
 	{ "playfm", fm_play_read_params, fm_play_help_menu, NULL },
 	{ "recsbc", sbcrec_read_params, sbcrec_help_menu, NULL } ,

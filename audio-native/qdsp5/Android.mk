@@ -81,6 +81,9 @@ LOCAL_SRC_FILES += fm_test.c
 LOCAL_SRC_FILES += lpatest.c
 ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SRC_FILES += devctltest.c
+ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+LOCAL_SRC_FILES += mvstest.c
+endif
 endif
 endif
 

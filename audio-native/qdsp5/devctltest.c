@@ -34,12 +34,17 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include "audiotest_def.h"
+
+#if defined(QC_PROP)
 #include "control.h"
 
 #ifdef QDSP6V2
 #include "acdb-loader.h"
 #include "acdb-id-mapper.h"
 #endif
+
+#endif
+
 
 #ifdef AUDIOV2
 #define DEVMGR_MAX_PLAYBACK_SESSION 4
@@ -60,6 +65,9 @@ static int devmgr_sid_count_tx = 0;
 
 #ifdef QDSP6V2
 static int acdb_init_count;
+static int devmgr_mvslp_devid_rx;
+static int devmgr_mvslp_devid_tx;
+static int mvs_lp_flag = 0;
 #endif
 
 const char *devctl_help_text =
@@ -102,7 +110,10 @@ If ANC Device is already enabled, then just run the enable_anc command  \n\
         echo \"devctl -cmd=loopback_set -txdev_id=x -rxdev_id=y\" >  	\n\
 	/data/audio_test					    	\n\
         echo \"devctl -cmd=loopback_reset -txdev_id=x -rxdev_id=y\" >  	\n\
-	/data/audio_test					    	\n"
+	/data/audio_test					    	\n\
+	To do device switch during VoIP call				\n\
+	echo \"devctl -cmd=mvs_dev_switch -rxdev_id=x -rxdev_id=x\"      \n\
+						 > /data/audio_test	\n"
 #endif
 "Note:                                                               	\n\
 (i)   Handset RX/TX is set as default device for all playbacks/recordings \n\
@@ -268,6 +279,77 @@ int devmgr_unregister_session(unsigned short session_id, unsigned short route_di
 		perror("devmgr_unregister_session: Invalid route direction\n");
 	return 0;
 }
+#ifdef QDSP6V2
+int devmgr_enable_voice_device(int devid_rx, int devid_tx)
+{
+	int ret = 0;
+
+	devmgr_mvslp_devid_rx = devid_rx;
+	devmgr_mvslp_devid_tx = devid_tx;
+
+	ret = msm_en_device(devmgr_mvslp_devid_rx, 1);
+        if (ret < 0)
+                printf("Error %d enabling rx device  devid=%d \n", ret, devmgr_mvslp_devid_rx);
+
+        ret = msm_en_device(devmgr_mvslp_devid_tx, 1);
+        if (ret < 0)
+                printf("Error %d enabling tx device  devid=%d\n", ret, devmgr_mvslp_devid_tx);
+
+	mvs_lp_flag = 1;
+
+	return ret;
+
+}
+
+int devmgr_disable_voice_device(void)
+{
+	int ret = 0;
+
+	ret = msm_en_device(devmgr_mvslp_devid_rx, 0);
+        if (ret < 0)
+                printf("Error %d disabling rx device  devid=%d\n", ret, devmgr_mvslp_devid_rx);
+
+        ret = msm_en_device(devmgr_mvslp_devid_tx, 0);
+        if (ret < 0)
+                printf("Error %d disabling tx device  devid=%d\n", ret, devmgr_mvslp_devid_tx);
+
+	mvs_lp_flag = 0;
+
+	return ret;
+
+}
+
+
+static int devmgr_mvs_dev_switch(int devid_rx, int devid_tx)
+{
+	int acdb_id_tx = 0;
+        int acdb_id_rx = 0;
+
+	printf(" route to new device: rxid=%d, txid=%d \n", devid_rx, devid_tx);
+	msm_route_voice(devid_rx, devid_tx, 1);
+
+	printf(" disable current device: rx=%d, tx=%d\n", devmgr_mvslp_devid_rx, devmgr_mvslp_devid_tx);
+	msm_en_device(devmgr_mvslp_devid_rx, 0);
+	msm_en_device(devmgr_mvslp_devid_tx, 0);
+
+	printf(" load new acdb \n");
+	acdb_mapper_get_acdb_id_from_dev_id(devid_tx, &acdb_id_tx);
+        acdb_mapper_get_acdb_id_from_dev_id(devid_rx, &acdb_id_rx);
+
+        acdb_loader_send_voice_cal(acdb_id_rx, acdb_id_tx);
+
+	devmgr_mvslp_devid_rx = devid_rx;
+	devmgr_mvslp_devid_tx = devid_tx;
+
+	printf(" enable new devices \n");
+        msm_en_device(devmgr_mvslp_devid_rx, 1);
+	msm_en_device(devmgr_mvslp_devid_tx, 1);
+
+	return 0;
+
+
+}
+#endif
 
 void audiotest_deinit_devmgr(void)
 {
@@ -313,8 +395,14 @@ void audiotest_init_devmgr(void)
 		}
 		printf("Setting default RX =  %d\n", devmgr_devid_rx);
 		devmgr_devid_rx = msm_get_device(def_device_rx);
+#ifdef QDSP6V2
+		devmgr_mvslp_devid_rx = devmgr_devid_rx;
+#endif
 		printf("Setting default TX =  %d\n", devmgr_devid_tx);
 		devmgr_devid_tx = msm_get_device(def_device_tx);
+#ifdef QDSP6V2
+		devmgr_mvslp_devid_tx = devmgr_devid_tx;
+#endif
 		for (i = 0; i < DEVMGR_MAX_PLAYBACK_SESSION; i++)
 			devmgr_sid_rx_array[i] = DEVMGR_DEFAULT_SID;
 		for (i = 0; i < DEVMGR_MAX_RECORDING_SESSION; i++)
@@ -655,6 +743,20 @@ int devmgr_devctl_handler()
 							("-rxdev_id=") - 1]);
 						msm_snd_dev_loopback
 							(rxdev_id, txdev_id, 0);
+					}
+				}
+			} else if ((!strcmp(token, "mvs_dev_switch")) && (mvs_lp_flag == 1)) {
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-rxdev_id=", (sizeof
+							("-rxdev_id=") - 1))) {
+					rxdev_id = atoi(&token[sizeof
+							("-rxdev_id=") - 1]);
+					token = strtok(NULL, " ");
+					if (!memcmp(token, "-txdev_id=",
+						(sizeof("-txdev_id=") - 1))) {
+						txdev_id = atoi(&token[sizeof
+							("-txdev_id=") - 1]);
+						devmgr_mvs_dev_switch(rxdev_id, txdev_id);
 					}
 				}
 			}

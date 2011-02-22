@@ -117,4 +117,11 @@ int sbcrec_read_params(void);
 int sbc_rec_control_handler(void* private_data);
 void sbcrec_help_menu(void);
 #endif
+
+#ifdef QDSP6V2
+/* MVS Test Module Interface Definition */
+int mvstest_read_params(void);
+void mvstest_help_menu(void);
+int mvs_lp_test_control_handler(void* private_data);
+#endif
 #endif /* AUDIOTEST_CASE_H */
