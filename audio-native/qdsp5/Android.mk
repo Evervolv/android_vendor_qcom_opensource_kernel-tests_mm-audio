@@ -45,7 +45,6 @@ endif
 endif
 
 LOCAL_MODULE            := mm-audio-native-test
-LOCAL_MODULE_TAGS       := optional
 LOCAL_CFLAGS            := $(mm-audio-native-def)
 LOCAL_PRELINK_MODULE    := false
 
