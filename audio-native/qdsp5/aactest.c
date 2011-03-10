@@ -1203,7 +1203,11 @@ static void *aac_nt_enc(void *arg)
 	struct audtest_config *config = (struct audtest_config *)arg;
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *)
 						config->private_data;
+	#ifdef AUDIOV2
 	struct msm_audio_pcm_config pcm_config;
+	#else
+	struct msm_audio_config pcm_config;
+	#endif
 	int afd = audio_data->afd;
 	char *pcm_buf;
 	int fd;
@@ -1381,7 +1385,7 @@ int aac_rec(struct audtest_config *config)
 			perror("cannot open output file");
 			return -1;
 		}
-#ifdef AUDIOV2
+#if defined(AUDIOV2) || defined(AUDIO7X27A)
 	if (!mode) {
 		  afd = open("/dev/msm_aac_in", O_RDONLY);
 		  if (afd < 0) {

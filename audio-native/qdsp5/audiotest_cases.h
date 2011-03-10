@@ -91,11 +91,15 @@ void voicememo_help_menu(void);
 /* SND Test Module Interface Definition */
 int sndsetdev_read_params(void);
 void sndsetdev_help_menu(void);
-#ifdef AUDIOV2
+
+#if defined(AUDIOV2) || defined(AUDIO7X27A)
 /* Voice Enc Test Module Interface Definition */
 int voiceenc_read_params(void);
 int voiceenc_control_handler(void *private_data);
 void voiceenc_help_menu(void);
+#endif
+
+#ifdef AUDIOV2
 /* Mp3 Test Module Interface Definition */
 int lpaplay_read_params(void);
 int lpa_play_control_handler(void* private_data);

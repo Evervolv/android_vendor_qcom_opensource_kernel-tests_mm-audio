@@ -116,6 +116,7 @@ static int eos_sent = false;
 static struct msm_audio_evrc_enc_config evrccfg;
 static struct msm_audio_qcelp_enc_config qcelpcfg;
 static struct msm_audio_amrnb_enc_config_v2 amrnbcfg_v2;
+static struct msm_audio_amrnb_enc_config amrnbcfg;
 
 #ifdef _ANDROID_
 static const char *cmdfile = "/data/audio_test";
@@ -652,6 +653,7 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		goto device_err;
 	}
 
+#ifndef AUDIO7X27A
 	if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
 		perror("could not get encoder id\n");
 		close(fd);
@@ -664,7 +666,7 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 			goto fail;
 		}
 	}
-
+#endif
 	/* Config param */
 	if(ioctl(afd, AUDIO_GET_STREAM_CONFIG, &cfg)) {
 		printf(" Error getting buf config param AUDIO_GET_CONFIG \n");
@@ -716,7 +718,23 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		printf("min_bit_rate = 0x%8x\n", evrccfg.min_bit_rate);
 		printf("max_bit_rate = 0x%8x\n", evrccfg.max_bit_rate);
 	} else if (rec_type == 3) {
-
+	#ifdef AUDIO7X27A
+		/* AMRNB specific settings */
+		if (ioctl(afd, AUDIO_GET_AMRNB_ENC_CONFIG, &amrnbcfg)) {
+			perror("Error: AUDIO_GET_AMRNB_ENC_CONFIG failed");
+			goto fail;
+		}
+		printf("dtx mode = 0x%8x\n", amrnbcfg.dtx_mode_enable);
+		printf("rate  = 0x%8x\n", amrnbcfg.enc_mode);
+		amrnbcfg.dtx_mode_enable = dtx_mode; /* 0 - DTX off, 1 - DTX on */
+		amrnbcfg.enc_mode = max_rate;
+		if (ioctl(afd, AUDIO_SET_AMRNB_ENC_CONFIG, &amrnbcfg)) {
+			perror("Error: AUDIO_SET_AMRNB_ENC_CONFIG failed");
+			goto fail;
+		}
+		printf("dtx mode = 0x%8x\n", amrnbcfg.dtx_mode_enable);
+		printf("rate  = 0x%8x\n", amrnbcfg.enc_mode);
+	#else
 		/* AMRNB specific settings */
 		if (ioctl(afd, AUDIO_GET_AMRNB_ENC_CONFIG_V2, &amrnbcfg_v2)) {
 			perror("Error: AUDIO_GET_AMRNB_ENC_CONFIG_V2 failed");
@@ -732,8 +750,10 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		}
 		printf("dtx mode = 0x%8x\n", amrnbcfg_v2.dtx_enable);
 		printf("rate = 0x%8x\n", amrnbcfg_v2.band_mode);
+	#endif
 	}
 
+	#ifndef AUDIO7X27A
 	/* Record form voice link */
 	if (rec_source <= VOC_REC_BOTH ) {
 
@@ -743,7 +763,7 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		}
 		printf("rec source = 0x%8x\n", rec_source);
 	}
-
+	#endif
 	/* Store handle for commands pass*/
 	audio_data->afd = afd;
 	sz = cfg.buffer_size;
@@ -849,20 +869,24 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 	printf("Secondary encoder stopped \n");
 	close(afd);
 
+#ifndef AUDIO7X27A
 	if (!clnt_config->mode) {
 		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
 			perror("\ncould not unregister recording session\n");
 		}
 	}
+#endif
 	return 0;
 fail:
 	close(afd);
 
+#ifndef AUDIO7X27A
 	if (!clnt_config->mode) {
 		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
 			perror("\ncould not unregister recording session\n");
 		}
 	}
+#endif
 device_err:
 	close(fd);
 	unlink(clnt_config->file_name);
@@ -919,6 +943,7 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 		goto device_err;
 	}
 
+#ifndef AUDIO7X27A
 	if (ioctl(afd, AUDIO_GET_SESSION_ID, &enc_id)) {
 		perror("could not get encoder id\n");
 		close(fd);
@@ -931,7 +956,7 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 			close(afd);
 			return -1;
 		}
-
+#endif
 	/* Config param */
 	if(ioctl(afd, AUDIO_GET_STREAM_CONFIG, &cfg)) {
 		printf("Error getting AUDIO_GET_STREAM_CONFIG\n");
@@ -1104,20 +1129,24 @@ done:
 	if(!audio_data->recbuf)
 	        free(audio_data->recbuf);
 	close(afd);
+#ifndef AUDIO7X27A
 	if(!clnt_config->mode)
 		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
 			perror("\ncould not unregister recording session\n");
 		}
+#endif
 	return 0;
 fail:
 	if(!audio_data->recbuf)
 	        free(audio_data->recbuf);
 	close(afd);
 
+#ifndef AUDIO7X27A
 	if(!clnt_config->mode)
 		if (devmgr_unregister_session(enc_id, DIR_TX) < 0) {
 			perror("\ncould not unregister recording session\n");
 		}
+#endif
 device_err:
 	close(fd);
 	unlink(clnt_config->file_name);

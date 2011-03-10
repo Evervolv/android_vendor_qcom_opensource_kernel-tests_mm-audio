@@ -396,7 +396,7 @@ int wav_rec(struct audtest_config *config)
 	}
 	write(fd, &hdr, sizeof(hdr));
 
-#ifdef AUDIOV2
+#if defined(AUDIOV2) || defined(AUDIO7X27A)
 	afd = open(dev_file_name, O_RDONLY);
 	if (afd < 0) {
 		perror("cannot open msm_pcm_in");
@@ -404,7 +404,7 @@ int wav_rec(struct audtest_config *config)
 		return -1;
 	}
 #else
-        afd = open("/dev/msm_pcm_in", O_RDWR);
+        afd = open("/dev/msm_pcm_in", O_RDONLY);
         if (afd < 0) {
                 perror("cannot open msm_pcm_in");
                 close(fd);
