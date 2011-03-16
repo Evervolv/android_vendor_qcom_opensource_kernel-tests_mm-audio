@@ -50,7 +50,7 @@ LOCAL_CFLAGS            := $(mm-audio-native-def)
 LOCAL_PRELINK_MODULE    := false
 
 LOCAL_C_INCLUDES        := $(mm-audio-native-inc)
-LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_HEADERS_INSTALL)
+LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SHARED_LIBRARIES  := libaudioalsa
 ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
