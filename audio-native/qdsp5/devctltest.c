@@ -188,6 +188,9 @@ int devmgr_enable_device(int dev_id, unsigned short route_dir)
 
 int devmgr_register_session(unsigned short session_id, unsigned short route_dir)
 {
+#ifdef QDSP6V2
+	int acdb_id;
+#endif
 
 	printf("devmgr_register_session: Registering Session ID = %d\n",
 								session_id);
@@ -200,6 +203,10 @@ int devmgr_register_session(unsigned short session_id, unsigned short route_dir)
 			perror("could not enable RX device\n");
 			return -1;
 		}
+#ifdef QDSP6V2
+		acdb_mapper_get_acdb_id_from_dev_id(devmgr_devid_rx, &acdb_id);
+		acdb_loader_send_audio_cal(acdb_id, msm_get_device_capability(devmgr_devid_rx));
+#endif
 		if (msm_route_stream(DIR_RX, session_id, devmgr_devid_rx, 1) < 0) {
 			perror("could not route stream to Device\n");
 			if (devmgr_disable_device(devmgr_devid_rx, DIR_RX) < 0)
@@ -215,7 +222,10 @@ int devmgr_register_session(unsigned short session_id, unsigned short route_dir)
 			perror("could not enable TX device\n");
 			return -1;
 		}
-
+#ifdef QDSP6V2
+		acdb_mapper_get_acdb_id_from_dev_id(devmgr_devid_tx, &acdb_id);
+		acdb_loader_send_audio_cal(acdb_id, msm_get_device_capability(devmgr_devid_tx));
+#endif
 		if (msm_route_stream(DIR_TX, session_id, devmgr_devid_tx, 1) < 0) {
 		perror("could not route stream to Device\n");
 			if (devmgr_disable_device(devmgr_devid_tx, DIR_TX) < 0)
@@ -366,6 +376,12 @@ void audiotest_deinit_devmgr(void)
 			devmgr_init_flag = 0;
 		}
 	}
+#ifdef QDSP6V2
+        if (acdb_init_count) {
+                acdb_loader_deallocate_ACDB();
+                acdb_init_count--;
+        }
+#endif
 }
 
 void audiotest_init_devmgr(void)
@@ -383,6 +399,16 @@ void audiotest_init_devmgr(void)
 		else
 			devmgr_mixer_init_flag = 1;
 	}
+
+#ifdef QDSP6V2
+	if (!acdb_init_count) {
+		if (acdb_loader_init_ACDB() != 0) {
+			printf("ACDB init failed!\n");
+			return ;
+		}
+		acdb_init_count++;
+	}
+#endif
 	if (devmgr_mixer_init_flag) {
 		printf("Device Manager: List of Devices supported: \n");
 		dev_cnt = msm_get_device_count();
@@ -446,9 +472,15 @@ int devmgr_devctl_handler()
 								printf("%s: Device Switch Success\n",__func__);
 							}
 
-							for (index = 0;
-                          index < devmgr_sid_count_rx;
+							for (index = 0; index < devmgr_sid_count_rx;
 								 index++) {
+#ifdef QDSP6V2
+								acdb_mapper_get_acdb_id_from_dev_id(
+									devmgr_sid_rx_array[index], &rxdev_acdb_id);
+								acdb_loader_send_audio_cal(rxdev_acdb_id,
+									msm_get_device_capability(
+										devmgr_sid_rx_array[index]));
+#endif
 								msm_route_stream
                           (DIR_RX, devmgr_sid_rx_array[index],
 								dev_dest, 1);
@@ -488,9 +520,14 @@ int devmgr_devctl_handler()
 								printf("%s: Device Switch Success\n",__func__);
 							}
 
-							for (index = 0;
-                          index < devmgr_sid_count_tx;
-                                 index++) {
+							for (index = 0; index < devmgr_sid_count_tx; index++) {
+#ifdef QDSP6V2
+								acdb_mapper_get_acdb_id_from_dev_id(
+									devmgr_sid_tx_array[index], &txdev_acdb_id);
+								acdb_loader_send_audio_cal(txdev_acdb_id,
+									msm_get_device_capability(
+										devmgr_sid_tx_array[index]));
+#endif
 								msm_route_stream
                           (DIR_TX, devmgr_sid_tx_array[index],
                                          dev_dest, 1);
@@ -540,6 +577,11 @@ int devmgr_devctl_handler()
 							("-sid=") - 1))) {
 						sid = atoi(&token[sizeof
 							("-sid=") - 1]);
+#ifdef QDSP6V2
+						acdb_mapper_get_acdb_id_from_dev_id(dev_id, &rxdev_acdb_id);
+						acdb_loader_send_audio_cal(rxdev_acdb_id,
+							msm_get_device_capability(dev_id));
+#endif
 						msm_route_stream
 							(DIR_RX, sid, dev_id, 1);
 					}
@@ -570,6 +612,11 @@ int devmgr_devctl_handler()
 							("-sid=") - 1))) {
 						sid = atoi(&token[sizeof
 							("-sid=") - 1]);
+#ifdef QDSP6V2
+						acdb_mapper_get_acdb_id_from_dev_id(dev_id, &txdev_acdb_id);
+						acdb_loader_send_audio_cal(txdev_acdb_id,
+							msm_get_device_capability(dev_id));
+#endif
 						msm_route_stream
 							(DIR_TX, sid, dev_id, 1);
 					}
@@ -664,14 +711,6 @@ int devmgr_devctl_handler()
 			}
 #ifdef QDSP6V2
 			else if (!strcmp(token, "enable_anc")) {
-				if (!acdb_init_count) {
-					ret_val = acdb_loader_init_ACDB();
-					if (ret_val) {
-						printf("Error %d: ACDB init failed\n", ret_val);
-						return ret_val;
-					}
-					acdb_init_count++;
-				}
 				ret_val |= acdb_loader_send_anc_cal(ANC_FF_STEREO_RX_ACDB_ID);
 				device = msm_get_device(anc_device);
 				ret_val |= msm_enable_anc(device, 1);
@@ -691,14 +730,7 @@ int devmgr_devctl_handler()
                                                 (sizeof("-rxdev_id=") - 1))) {
                                                 rxdev_id = atoi(&token[sizeof
                                                         ("-rxdev_id=") - 1]);
-						if (!acdb_init_count) {
-							ret_val = acdb_loader_init_ACDB();
-							if (ret_val) {
-								printf("Error %d: ACDB init failed\n", ret_val);
-								return ret_val;
-							}
-							acdb_init_count++;
-						}
+
 						ret_val = acdb_mapper_get_acdb_id_from_dev_id(txdev_id, &txdev_acdb_id);
 						if (ret_val) {
 							printf("Error %d: Get ACDB id failed.\n", ret_val);
