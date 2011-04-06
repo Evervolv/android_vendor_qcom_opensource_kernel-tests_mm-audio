@@ -95,7 +95,11 @@ Usage: echo \"devctl -cmd=dev_switch_rx -dev_id=x\" > /data/audio_test	\n\
 	echo \"devctl -cmd=disable_dev -dev_id=x\" > /data/audio_test	\n\
 	echo \"devctl -cmd=disable_dev -dev_id=y\" > /data/audio_test	\n\
 where x,y = any of the supported device IDs listed below,           	\n\
-z = 0/1 where 0 is unmute, 1 is mute 				    	\n"
+z = 0/1 where 0 is unmute, 1 is mute 				    	\n\
+        echo \"devctl -cmd=loopback_set -txdev_id=x -rxdev_id=y\" >  	\n\
+	/data/audio_test					    	\n\
+        echo \"devctl -cmd=loopback_reset -txdev_id=x -rxdev_id=y\" >  	\n\
+	/data/audio_test					    	\n"
 #ifdef QDSP5V2
 "	echo \"devctl -cmd=mute_dev -dev_id=x -mute=0/1\" > /data/audio_test\n"
 #endif
@@ -745,7 +749,9 @@ int devmgr_devctl_handler()
 						acdb_loader_send_voice_cal(txdev_acdb_id, rxdev_acdb_id);
                                         }
                                 }
-			} else if (!strcmp(token, "loopback_set")) {
+			}
+#endif
+			else if (!strcmp(token, "loopback_set")) {
 				printf("Loopback Set\n");
 				token = strtok(NULL, " ");
 				if (!memcmp(token, "-txdev_id=", (sizeof
@@ -777,7 +783,9 @@ int devmgr_devctl_handler()
 							(rxdev_id, txdev_id, 0);
 					}
 				}
-			} else if ((!strcmp(token, "mvs_dev_switch")) && (mvs_lp_flag == 1)) {
+			}
+#ifdef QDSP6V2
+			else if ((!strcmp(token, "mvs_dev_switch")) && (mvs_lp_flag == 1)) {
 				token = strtok(NULL, " ");
 				if (!memcmp(token, "-rxdev_id=", (sizeof
 							("-rxdev_id=") - 1))) {
