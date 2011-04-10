@@ -29,6 +29,7 @@
 #include "audiotest_def.h"
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <linux/msm_audio.h>
 #include <linux/msm_audio_aac.h>
 
 typedef unsigned char uint8;
@@ -128,6 +129,103 @@ struct enc_meta_out_8660{
 	unsigned int lsw_ts;
 	unsigned int nflags;
 } __attribute__ ((packed));
+
+struct meta_out_8660_pb{
+	unsigned int offset_to_frame;
+	unsigned int frame_size;
+	unsigned int encoded_pcm_samples;
+	unsigned int msw_ts;
+	unsigned int lsw_ts;
+	unsigned int nflags;
+} __attribute__ ((packed));
+
+struct dec_meta_out{
+	unsigned int num_of_frames;
+	struct meta_out_8660_pb meta_out_8660_pb[];
+} __attribute__ ((packed));
+
+static int in_size =0;
+static int out_size =0;
+static int file_write=0;
+static int eos_ack=0;
+static pthread_mutex_t avail_lock;
+static pthread_cond_t avail_cond;
+static pthread_mutex_t consumed_lock;
+static pthread_cond_t consumed_cond;
+static int data_is_available = 0;
+static int data_is_consumed = 0;
+static int in_free_indx;
+static int in_data_indx;
+static int out_free_indx;
+static int out_data_indx;
+
+#define AACTEST_IBUFSZ (32*1024)
+#define AACTEST_NUM_IBUF 2
+#define AACTEST_IPMEM_SZ (AACTEST_IBUFSZ * AACTEST_NUM_IBUF)
+
+#define AACTEST_OBUFSZ (32*1024)
+#define AACTEST_NUM_OBUF 2
+#define AACTEST_OPMEM_SZ (AACTEST_OBUFSZ * AACTEST_NUM_OBUF)
+
+struct msm_audio_aio_buf aio_ip_buf[AACTEST_NUM_IBUF];
+struct msm_audio_aio_buf aio_op_buf[AACTEST_NUM_OBUF];
+
+static void wait_for_data(void)
+{
+	pthread_mutex_lock(&avail_lock);
+
+	while (data_is_available == 0) {
+		pthread_cond_wait(&avail_cond, &avail_lock);
+	}
+	data_is_available = 0;
+	pthread_mutex_unlock(&avail_lock);
+}
+
+static void data_available(void)
+{
+	pthread_mutex_lock(&avail_lock);
+	if (data_is_available == 0) {
+		data_is_available = 1;
+		pthread_cond_broadcast(&avail_cond);
+	}
+	pthread_mutex_unlock(&avail_lock);
+}
+
+static void wait_for_data_consumed(void)
+{
+	pthread_mutex_lock(&consumed_lock);
+
+	while (data_is_consumed == 0) {
+		pthread_cond_wait(&consumed_cond, &consumed_lock);
+	}
+	data_is_consumed = 0;
+	pthread_mutex_unlock(&consumed_lock);
+}
+
+static void data_consumed(void )
+{
+	pthread_mutex_lock(&consumed_lock);
+	if (data_is_consumed == 0) {
+		data_is_consumed = 1;
+		pthread_cond_broadcast(&consumed_cond);
+	}
+	pthread_mutex_unlock(&consumed_lock);
+}
+
+static void create_wav_header(int Datasize)
+{
+	append_header.Chunk_size = Datasize + 8 + 16 + 12;
+	append_header.Chunk_data_size = Datasize;
+	return;
+}
+
+static int aac_start_8660(struct audtest_config *clnt_config);
+static void *aac_dec_event_8660(void *arg);
+static void *aac_write_thread_8660(void *arg);
+static void *aac_read_thread_8660(void *arg);
+static void *setup_aac_file(struct audtest_config *clnt_config);
+
+
 
 #ifdef _ANDROID_
 static const char *cmdfile = "/data/audio_test";
@@ -286,12 +384,6 @@ void audaac_rec_install_adts_header_variable (uint16  byte_num,
                           &audaac_hdr_bit_index);
 
 } /* audaac_rec_install_adts_header_variable */
-
-static void create_wav_header(int Datasize)
-{
-	append_header.Chunk_size = Datasize + 8 + 16 + 12;
-	append_header.Chunk_data_size = Datasize;
-}
 
 static void *aac_dec(void *arg)
 {
@@ -830,7 +922,11 @@ void* playaac_thread(void* arg) {
 	(struct audiotest_thread_context*) arg;
 	int ret_val;
 
-	ret_val = aac_play(&context->config);
+	if (context->config.tgt == 0x08)
+		ret_val = aac_start_8660(&context->config);
+	else
+		ret_val = aac_play(&context->config);
+
 	if (!context->config.private_data)
 		free(context->config.private_data);
 	printf(" Free audio instance 0x%8x \n", (unsigned int) context->config.private_data);
@@ -873,14 +969,29 @@ int aacplay_read_params(void) {
 			context->config.channel_mode = 2;
 			context->config.fmt_config.aac.object_type = AUDIO_AAC_OBJECT_LC;
 			context->config.fmt_config.aac.format_type = AUDIO_AAC_FORMAT_RAW;
+			context->config.tgt = 0x07;
+			out_size = 8192 + sizeof(struct dec_meta_out);
+			in_size = 8192;
+			file_write = 1;
 
 			token = strtok(NULL, " ");
 			while (token != NULL) {
-				if (!memcmp(token,"-rate=", (sizeof("-rate=") - 1))) {
+				if (!memcmp(token, "-outsize=",
+						   (sizeof("-outsize=") - 1))) {
+					out_size = atoi(&token[sizeof("-outsize=") - 1]) + sizeof(struct dec_meta_out);
+				} else if (!memcmp(token, "-insize=",
+						   (sizeof("-insize=") - 1))) {
+					in_size = atoi(&token[sizeof("-insize=") - 1]);
+				} else if (!memcmp(token, "-wr=",
+						   (sizeof("-wr=") - 1))) {
+					file_write = atoi(&token[sizeof("-wr=") - 1]);
+				}else if (!memcmp(token,"-rate=", (sizeof("-rate=") - 1))) {
 					context->config.sample_rate = atoi(&token[sizeof("-rate=") - 1]);
+					printf("-->SR %d\n", context->config.sample_rate);
 				} else if (!memcmp(token,"-cmode=", (sizeof("-cmode=") - 1))) {
 					context->config.channel_mode = 
 					atoi(&token[sizeof("-cmode=") - 1]);
+					printf("-->ch %d\n", context->config.channel_mode);
 				} else if (!memcmp(token,"-profile=", (sizeof("-profile=") - 1))) {
 					token = &token[sizeof("-profile=") - 1];
 					printf("aac profile %s\n", token);
@@ -954,7 +1065,11 @@ int aacplay_read_params(void) {
 						audio_data->repeat = -1;
 					else
 						audio_data->repeat--;
-                                } else {
+                                }  else if (!memcmp(token, "-tgt=",
+						   (sizeof("-tgt=") - 1))) {
+					context->config.tgt = atoi(&token[sizeof("-tgt=") - 1]);
+					printf("-->TGT=%d\n",context->config.tgt);
+				} else {
 					context->config.file_name = token;
 				}
 				token = strtok(NULL, " ");
@@ -1406,7 +1521,7 @@ int aac_rec(struct audtest_config *config)
 }
 
 
-/* 8660*/
+/* 8660 Record*/
 static int fill_pcm_buffer_8660(void *buf, unsigned sz, void *cookie)
 {
 	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cookie;
@@ -1967,13 +2082,611 @@ int aac_rec_control_handler(void* private_data) {
 
 	return ret_val;
 }
+/***********************************************/
+/*************** 8660 PLAYBACK *****************/
+/***********************************************/
+
+/* Get File content and create meta */
+static int fill_buffer_8660_pb(void *buf, unsigned sz, void *cookie)
+{
+        struct meta_in meta;
+        struct audio_pvt_data *audio_data = (struct audio_pvt_data *) cookie;
+        unsigned cpy_size = (sz < audio_data->avail?sz:audio_data->avail);
+	#ifdef DEBUG_LOCAL
+	char *temp;
+	printf("%s:frame count %d\n", __func__, audio_data->frame_count);
+	#endif
+	if (audio_data->mode) {
+		meta.ntimestamp.LowPart = 0;
+	        meta.ntimestamp.HighPart = (unsigned long long)(audio_data->frame_count);
+		meta.offset = sizeof(struct meta_in);
+	        audio_data->frame_count++;
+	#ifdef DEBUG_LOCAL
+                printf("Meta In High part is %lu\n",
+                                meta.ntimestamp.HighPart);
+                printf("Meta In Low part is %lu\n",
+                                meta.ntimestamp.LowPart);
+                printf("Meta In ntimestamp: %llu\n", (((unsigned long long)
+                                        meta.ntimestamp.HighPart << 32) +
+                                        meta.ntimestamp.LowPart));
+                printf("meta in size %d\n", sizeof(struct meta_in));
+	#endif
+		if (audio_data->avail == 0) {
+			/* End of file, send EOS */
+			meta.nflags = EOS;
+	                memcpy(buf, &meta, sizeof(struct meta_in));
+	                return (sizeof(struct meta_in));
+		}
+	        meta.nflags = 0;
+		memcpy(buf, &meta, sizeof(struct meta_in));
+	        memcpy(((char *)buf + sizeof(struct meta_in)), audio_data->next, cpy_size);
+		#ifdef DEBUG_LOCAL
+		temp = ((char*)buf + sizeof(struct meta_in));
+		printf("\nFirst three bytes 0x%2x:0x%2x:0x%2x\n", *temp, *(temp+1), *(temp+2));
+		#endif
+	} else {
+	        if (audio_data->avail == 0) {
+	                return 0;
+        	}
+	        audio_data->frame_count++;
+	        memcpy((char *)buf, audio_data->next, cpy_size);
+		#ifdef DEBUG_LOCAL
+		temp = (buf);
+		printf("\nFirst three bytes 0x%2x:0x%2x:0x%2x\n", *temp, *(temp+1), *(temp+2));
+		#endif
+	}
+        audio_data->next += cpy_size;
+        audio_data->avail -= cpy_size;
+	if (audio_data->mode)
+		return cpy_size + sizeof(struct meta_in);
+	else
+		return cpy_size;
+}
+
+/* Expect on raw file, which is  only aac data file */
+static void *setup_aac_file(struct audtest_config *clnt_config)
+{
+        struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
+        struct stat stat_buf;
+        char *content_buf;
+        int fd;
+        size_t buffer_size;
+
+        printf("setup aac file\n");
+        fd = open(clnt_config->file_name, O_RDONLY);
+        if (fd < 0) {
+                printf("Err while opening AAC bin file for decoder \
+                        : %s\n", clnt_config->in_file_name);
+		return((void *)-1);
+        }
+        (void) fstat(fd, &stat_buf);
+        buffer_size = stat_buf.st_size;
+	/* memory set for file */
+        audio_data->next = (char*)malloc(buffer_size);
+        printf("Total AAC bin file len: %d, buffer start addr=0x%p\n", buffer_size, audio_data->next);
+
+        if (!audio_data->next) {
+                fprintf(stderr,"could not allocate %d bytes\n", buffer_size);
+                close(fd);
+		return ((void*)-1);
+        }
+        audio_data->org_next = audio_data->next;
+        content_buf = audio_data->org_next;
+
+        if ((read(fd, audio_data->next, buffer_size)) != (ssize_t)buffer_size) {
+                fprintf(stderr,"could not read %d bytes\n", buffer_size);
+                goto fail;
+        }
+        audio_data->avail = buffer_size;
+        audio_data->org_avail = audio_data->avail;
+        printf("Total available aac len: %d, buffer start addr=%p\n", audio_data->avail, audio_data->org_next);
+	return 0;
+fail:
+        close(fd);
+        free(content_buf);
+        return ((void*)-1);
+}
+
+static void *aac_read_thread_8660(void *arg)
+{
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) arg;
+	int afd = audio_data->afd;
+	int total_len;
+	int fd = 0;
+	struct dec_meta_out *meta_out_ptr;
+	struct meta_out_8660_pb *meta_out_8660_pb;
+	struct msm_audio_aio_buf aio_buf;
+	struct msm_audio_config config;
+#ifdef AUDIOV2
+	unsigned short dec_id;
+#endif
+	unsigned int first_frame_offset, idx;
+	unsigned int total_frame_size;
+printf("*********************************\n");
+printf("%s:fw=%d\n", __func__, file_write);
+printf("*********************************\n");
+	total_len = 0;
+	if(file_write) {
+		// Log PCM samples to a file
+		fd = open(audio_data->outfile, O_RDWR | O_CREAT,
+		  S_IRWXU | S_IRWXG | S_IRWXO);
+		if (fd < 0) {
+			perror("Cannot open audio sink device");
+			return ((void*)-1);
+		}
+		lseek(fd, 44, SEEK_SET);  /* Set Space for Wave Header */
+	} else {
+		// LOg PCM samples to pcm out driver
+		fd = open(audio_data->outfile, O_WRONLY);
+		if (fd < 0) {
+			perror("Cannot open audio sink device");
+			return ((void*)-1);
+		}
+#ifdef AUDIOV2
+		if (ioctl(fd, AUDIO_GET_SESSION_ID, &dec_id)) {
+			perror("could not get pcm decoder session id\n");
+			goto err_state;
+		}
+		printf("pcm decoder session id %d\n", dec_id);
+#if defined(QC_PROP)
+		if (devmgr_register_session(dec_id, DIR_RX) < 0) {
+			perror("could not route pcm decoder stream\n");
+			goto err_state;
+		}
+#endif
+#endif
+		if (ioctl(fd, AUDIO_GET_CONFIG, &config)) {
+			perror("could not get pcm config");
+			goto err_state;
+		}
+		config.channel_count = audio_data->channels;
+		config.sample_rate = audio_data->freq;
+		if (ioctl(fd, AUDIO_SET_CONFIG, &config)) {
+			perror("could not set pcm config");
+			goto err_state;
+		}
+		if (ioctl(fd, AUDIO_START, 0) < 0) {
+			perror("could not start pcm playback node");
+			goto err_state;
+		}
+	}
+	while(1) {
+		// Send free Read buffer
+		aio_buf.buf_addr = aio_op_buf[out_free_indx].buf_addr;
+		aio_buf.buf_len =  aio_op_buf[out_free_indx].buf_len;   
+		aio_buf.data_len = 0; // Driver will notify actual size     
+		aio_buf.private_data =  aio_op_buf[out_free_indx].private_data;
+		wait_for_data();
+#ifdef DEBUG_LOCAL
+		printf("%s:free_idx %d, data_idx %d\n", __func__, out_free_indx, out_data_indx);
+#endif
+		out_free_indx = out_data_indx;
+		printf("%s:ASYNC_READ addr %p len %d\n", __func__, aio_buf.buf_addr, aio_buf.buf_len);
+		if (ioctl(afd, AUDIO_ASYNC_READ, &aio_buf) < 0) {
+			printf("error on async read\n");
+			break;
+		}
+		meta_out_ptr = (struct dec_meta_out *)aio_op_buf[out_free_indx].buf_addr;
+		meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(meta_out_ptr->num_of_frames)));
+		printf("nr of frames %d\n", meta_out_ptr->num_of_frames);
+#ifdef DEBUG_LOCAL
+		printf("%s:msw ts 0x%8x, lsw_ts 0x%8x, nflags 0x%8x\n", __func__,
+			meta_out_8660_pb->msw_ts,
+			meta_out_8660_pb->lsw_ts,
+			meta_out_8660_pb->nflags);
+#endif
+		first_frame_offset = meta_out_8660_pb->offset_to_frame + sizeof(meta_out_ptr->num_of_frames);
+		total_frame_size = 0;
+		if(meta_out_ptr->num_of_frames != 0xFFFFFFFF) {
+			// Go over all meta data field to find exact frame size
+			for(idx=0; idx < meta_out_ptr->num_of_frames; idx++) { 
+				total_frame_size +=  meta_out_8660_pb->frame_size;
+				meta_out_8660_pb++;
+			}
+			printf("total size %d\n", total_frame_size);
+		} else {
+			//OutPut EOS reached
+			if (meta_out_8660_pb->nflags == EOS) {
+				printf("%s:Received EOS at output port 0x%8x\n", __func__,
+				meta_out_8660_pb->nflags);
+				break;
+			}
+		}
+		printf("%s: Read Size %d offset %d\n", __func__,
+			total_frame_size, first_frame_offset);
+		write(fd, ((char *)aio_op_buf[out_free_indx].buf_addr + first_frame_offset),
+								total_frame_size);
+		total_len +=  total_frame_size;
+	}
+	if(file_write) {
+		append_header.Sample_rate = audio_data->freq;
+		append_header.Number_Channels = audio_data->channels;
+		append_header.Bytes_Sec = append_header.Sample_rate *
+			append_header.Number_Channels * 2;
+		append_header.Block_align = append_header.Number_Channels * 2;
+		create_wav_header(total_len);
+		lseek(fd, 0, SEEK_SET);
+		write(fd, (char *)&append_header, 44);
+	} else {
+		sleep(1); // All buffers drained
+#if defined(QC_PROP) && defined(AUDIOV2)
+		if (devmgr_unregister_session(dec_id, DIR_RX) < 0) {
+			perror("could not deroute pcm decoder stream\n");
+		}
+#endif
+	}
+err_state:
+	close(fd);
+	printf("%s:exit\n", __func__);
+	pthread_exit(NULL);
+	return NULL;
+}
+
+static void *aac_write_thread_8660(void *arg)
+{
+	struct msm_audio_aio_buf aio_buf;
+	struct audio_pvt_data *audio_data = (struct audio_pvt_data *) arg;
+	int afd = audio_data->afd, sz;
+	struct meta_in *meta_in_ptr;
+	int eos=0;
+
+	while(1) {
+		if(!eos) {
+			// Copy write buffer
+	 		aio_buf.buf_addr = aio_ip_buf[in_free_indx].buf_addr;
+			aio_buf.buf_len =  aio_ip_buf[in_free_indx].buf_len;   
+			aio_buf.private_data =  aio_ip_buf[in_free_indx].private_data;
+			sz = fill_buffer_8660_pb(aio_buf.buf_addr, in_size, audio_data);
+			if (sz == sizeof(struct meta_in)) { //NT mode EOS
+				printf("%s:Done reading file\n", __func__);
+				printf("%s:Send EOS on I/N Put\n", __func__);
+				aio_buf.data_len = sz;
+				aio_ip_buf[in_free_indx].data_len = sz;
+				eos = 1;
+			} else if (sz == 0){ // Tunnel mode EOS
+				eos = 1;
+				break;
+			} else {
+				aio_buf.data_len = sz;
+				aio_ip_buf[in_free_indx].data_len = sz;
+			}
+			printf("%s:ASYNC_WRITE addr %p len %d\n", __func__, aio_buf.buf_addr,aio_buf.data_len);
+			ioctl(afd, AUDIO_ASYNC_WRITE, &aio_buf);
+		}
+		wait_for_data_consumed();
+#ifdef DEBUG_LOCAL
+		printf("%s:free_idx %d, data_idx %d\n", __func__, in_free_indx, in_data_indx);
+#endif
+		in_free_indx = in_data_indx;
+		meta_in_ptr = (struct meta_in *)aio_ip_buf[in_data_indx].buf_addr;
+		//Input EOS reached
+		if (meta_in_ptr->nflags == EOS) {
+			printf("%s:Received EOS buffer back at i/p 0x%8x\n", __func__, meta_in_ptr->nflags);
+			break;
+		}
+	}
+	if(!audio_data->mode && eos) {
+		printf("%s:Wait for data to drain out\n", __func__); 
+		fsync(afd);
+		eos_ack = 1;
+		sleep(1);
+		ioctl(afd, AUDIO_ABORT_GET_EVENT, 0);
+	}
+	printf("%s:exit\n", __func__);
+	// Free memory created during aac bin file 
+        free(audio_data->org_next);
+	pthread_exit(NULL);
+	return NULL;
+}
+
+static void *aac_dec_event_8660(void *arg)
+{
+        struct audio_pvt_data *audio_data = (struct audio_pvt_data *) arg;
+	int afd = audio_data->afd, rc;
+	struct msm_audio_event event;
+	int eof = 0;
+	struct dec_meta_out *meta_out_ptr;
+	struct meta_out_8660_pb *meta_out_8660_pb;
+	struct meta_in *meta_in_ptr;
+	pthread_t evt_read_thread;
+	pthread_t evt_write_thread;
+
+	eos_ack = 0;
+	if (audio_data->mode) // Non Tunnel mode
+		pthread_create(&evt_read_thread, NULL, aac_read_thread_8660, (void *) audio_data);
+	pthread_create(&evt_write_thread, NULL, aac_write_thread_8660, (void *) audio_data);
+	// Till EOF not reached in NT or till eos not reached in tunnel
+	while((!eof && audio_data->mode) || (!eos_ack && !audio_data->mode)) {
+		// Wait till timeout
+		event.timeout_ms = 0;
+		rc = ioctl(afd, AUDIO_GET_EVENT, &event);
+		if (rc < 0) {
+	  		printf("%s: errno #%d", __func__, errno);
+	  		continue;
+		}
+#ifdef DEBUG_LOCAL
+		printf("%s:AUDIO_GET_EVENT event %d \n", __func__, event.event_type);
+#endif
+		switch(event.event_type) {
+			case AUDIO_EVENT_READ_DONE:
+				if(event.event_payload.aio_buf.buf_len == 0)
+					printf("Warning buf_len Zero\n");
+				if (event.event_payload.aio_buf.data_len >= sizeof(struct dec_meta_out)) {
+		  			printf("%s: READ_DONE: addr %p len %d\n", __func__,
+						event.event_payload.aio_buf.buf_addr,
+						event.event_payload.aio_buf.data_len);
+					meta_out_ptr = (struct dec_meta_out *)event.event_payload.aio_buf.buf_addr;
+					out_data_indx =(int) event.event_payload.aio_buf.private_data;
+					meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(meta_out_ptr->num_of_frames)));
+					//OutPut EOS reached
+					if (meta_out_8660_pb->nflags == EOS) {
+			  			eof = 1;
+						printf("%s:Received EOS event at output 0x%8x\n", __func__,
+						meta_out_8660_pb->nflags);
+					}
+					data_available();
+				} else {
+					printf("%s:AUDIO_EVENT_READ_DONE:unexpected length\n", __func__);
+				}
+		 		break;
+			case AUDIO_EVENT_WRITE_DONE:
+				if (event.event_payload.aio_buf.data_len >= sizeof(struct meta_in)) {
+					printf("%s:WRITE_DONE: addr %p len %d\n", __func__,
+						event.event_payload.aio_buf.buf_addr,
+						event.event_payload.aio_buf.data_len);
+					meta_in_ptr = (struct meta_in *)event.event_payload.aio_buf.buf_addr;
+					in_data_indx =(int) event.event_payload.aio_buf.private_data;
+					//Input EOS reached
+					if (meta_in_ptr->nflags == EOS) {
+						printf("%s:Received EOS at input 0x%8x\n", __func__, meta_in_ptr->nflags);
+					}
+					data_consumed();
+				} else {
+					printf("%s:AUDIO_EVENT_WRITE_DONE:unexpected length\n", __func__);
+				}
+				break;
+			default:
+				printf("%s: -Unknown event- %d\n", __func__, event.event_type);
+				break;
+		}
+	}
+	if(audio_data->mode)
+		pthread_join(evt_read_thread, NULL);
+	else
+		pthread_join(evt_write_thread, NULL);
+	printf("%s:exit\n", __func__);
+	pthread_exit(NULL);
+	return NULL;
+}
+
+
+static int aac_start_8660(struct audtest_config *clnt_config)
+{
+        struct audio_pvt_data *audio_data = (struct audio_pvt_data *) clnt_config->private_data;
+	unsigned n = 0;
+	pthread_t evt_thread;
+	int sz;
+	int rc = -1;
+#ifdef AUDIOV2
+	int dec_id;
+#endif
+	int afd, ipmem_fd[AACTEST_NUM_IBUF], opmem_fd[AACTEST_NUM_OBUF];
+	void *ipmem_ptr[AACTEST_NUM_IBUF], *opmem_ptr[AACTEST_NUM_OBUF];
+	struct msm_audio_pmem_info pmem_info;
+	struct msm_audio_aio_buf aio_buf;
+	struct msm_audio_buf_cfg buf_cfg;
+	struct msm_audio_config config;
+	struct msm_audio_aac_config aac_config;
+	unsigned int open_flags;
+
+	memset(ipmem_fd, 0, (sizeof(int) * AACTEST_NUM_IBUF));
+	memset(opmem_fd, 0, (sizeof(int) * AACTEST_NUM_OBUF));
+	memset(ipmem_ptr, 0, (sizeof(void *) * AACTEST_NUM_IBUF));
+	memset(opmem_ptr, 0, (sizeof(void *) * AACTEST_NUM_OBUF));
+
+	if(((in_size + sizeof(struct meta_in)) > AACTEST_IBUFSZ) ||
+		(out_size > AACTEST_OBUFSZ)) {
+			perror("configured input / output size more"\
+			"than pmem allocation");
+			return -1; 
+	}
+
+	if (audio_data->mode)
+		open_flags = O_RDWR | O_NONBLOCK;
+	else
+		open_flags = O_WRONLY | O_NONBLOCK;
+
+	afd = open("/dev/msm_aac", open_flags);
+
+	if (afd < 0) {
+		perror("Cannot open AAC device");
+		return -1;
+	}
+
+	audio_data->afd = afd; /* Store */
+
+	setup_aac_file(clnt_config);
+	if (audio_data->mode) {
+		/* PCM config */
+		if (ioctl(afd, AUDIO_GET_CONFIG, &config)) {
+			perror("could not get config");
+			goto err_state1;
+		}
+		config.sample_rate = clnt_config->sample_rate;
+		config.channel_count = clnt_config->channel_mode;
+
+		if (ioctl(afd, AUDIO_SET_CONFIG, &config)) {
+			perror("could not set config");
+			goto err_state1;
+		}
+		printf("%s:config sample_rate=%d channels=%d bitspersample=%d \n",
+			__func__,
+			config.sample_rate, config.channel_count, config.bits);
+	} else {
+#ifdef AUDIOV2
+		if (ioctl(afd, AUDIO_GET_SESSION_ID, &dec_id)) {
+			perror("could not get decoder session id\n");
+			goto err_state1;
+		}
+#if defined(QC_PROP)
+		if (devmgr_register_session(dec_id, DIR_RX) < 0) {
+			goto err_state1;
+		}
+#endif
+#endif
+	}
+	audio_data->frame_count	= 0;
+	aac_config.format = clnt_config->fmt_config.aac.format_type;
+	aac_config.audio_object = clnt_config->fmt_config.aac.object_type;
+	aac_config.sbr_on_flag = clnt_config->fmt_config.aac.sbr_flag;
+	aac_config.sbr_ps_on_flag = clnt_config->fmt_config.aac.sbr_ps_flag;
+	aac_config.channel_configuration = clnt_config->channel_mode;
+
+	if (ioctl(afd, AUDIO_SET_AAC_CONFIG, &aac_config)) {
+		perror("could not set AUDIO_SET_AAC_CONFIG_V2");
+		goto err_state2;
+	}
+	if(ioctl(afd, AUDIO_GET_BUF_CFG, &buf_cfg)) {
+		printf("Error getting AUDIO_GET_BUF_CONFIG\n");
+		goto err_state2;
+	}
+	printf("Default meta_info_enable = 0x%8x\n", buf_cfg.meta_info_enable);
+	printf("Default frames_per_buf = 0x%8x\n", buf_cfg.frames_per_buf);
+	if (audio_data->mode) {
+		// NT mode support meta info
+		buf_cfg.meta_info_enable = 1;
+		if(ioctl(afd, AUDIO_SET_BUF_CFG, &buf_cfg)) {
+			printf("Error setting AUDIO_SET_BUF_CONFIG\n");
+			goto err_state2;
+		}
+	}
+	pthread_cond_init(&avail_cond, 0);
+	pthread_mutex_init(&avail_lock, 0);
+	pthread_cond_init(&consumed_cond, 0);
+	pthread_mutex_init(&consumed_lock, 0);
+	data_is_available = 0;
+	data_is_consumed = 0;
+	in_free_indx=0;
+	out_free_indx=0;
+	if ((ioctl(afd, AUDIO_START, 0))< 0 ) {
+	   		printf("aactest: unable to start driver\n");
+			goto err_state2;
+	}
+	else printf("%s: AUDIO_START success\n", __func__);
+	if (audio_data->mode) {
+		/* non - tunnel portion */
+		printf(" selected non-tunnel part\n");
+		// Register read buffers
+		for (n = 0; n < AACTEST_NUM_OBUF; n++) {
+			opmem_fd[n] = open("/dev/pmem_audio", O_RDWR);
+			printf("%s: opmem_fd %x\n",  __func__, opmem_fd[n]);
+			opmem_ptr[n] = mmap(0, AACTEST_OBUFSZ,
+				PROT_READ | PROT_WRITE, MAP_SHARED, opmem_fd[n], 0);
+			printf("%s:opmem_ptr[%d] %x\n", __func__, n, (unsigned int) opmem_ptr[n]);
+			pmem_info.fd = opmem_fd[n];
+			pmem_info.vaddr = opmem_ptr[n];
+			rc = ioctl(afd, AUDIO_REGISTER_PMEM, &pmem_info);
+			if(rc < 0) {
+                                printf( "error on register opmem=%d\n",rc);
+				goto err_state2;
+                        }
+			// Read buffers local structure
+		 	aio_op_buf[n].buf_addr = opmem_ptr[n];
+			aio_op_buf[n].buf_len = out_size + sizeof(struct dec_meta_out); 
+			aio_op_buf[n].data_len = 0; // Driver will notify actual size 
+			aio_op_buf[n].private_data = (void *)n; //Index
+		}
+		// Send n-1 Read buffer
+		for (n = 0; n < (AACTEST_NUM_OBUF-1); n++) {
+		 	aio_buf.buf_addr = aio_op_buf[n].buf_addr;
+			aio_buf.buf_len = aio_op_buf[n].buf_len;
+			aio_buf.data_len = aio_op_buf[n].data_len; 
+			aio_buf.private_data = aio_op_buf[n].private_data;
+			printf("ASYNC_READ addr %p len %d\n", aio_buf.buf_addr,
+				aio_buf.buf_len);
+			if (ioctl(afd, AUDIO_ASYNC_READ, &aio_buf) < 0) {
+				printf("error on async read\n");
+				goto err_state2;
+			}
+		}
+		//Indicate available free buffer as (n-1)
+		out_free_indx = AACTEST_NUM_OBUF-1;
+	}
+	//Register Write  buffer
+	for (n = 0; n < AACTEST_NUM_IBUF; n++) {
+		ipmem_fd[n] = open("/dev/pmem_audio", O_RDWR);
+		printf("%s: ipmem_fd %x\n",  __func__, ipmem_fd[n]);
+		ipmem_ptr[n] = mmap(0, AACTEST_IBUFSZ,
+			PROT_READ | PROT_WRITE, MAP_SHARED, ipmem_fd[n], 0);
+		printf("%s:ipmem_ptr[%d] %x\n", __func__, n, (unsigned int )ipmem_ptr[n]);
+		pmem_info.fd = ipmem_fd[n];
+		pmem_info.vaddr = ipmem_ptr[n];
+		rc = ioctl(afd, AUDIO_REGISTER_PMEM, &pmem_info);
+		if(rc < 0) {
+                        printf( "error on register ipmem=%d\n",rc);
+			goto err_state2;
+                }
+		// Write buffers local structure
+	 	aio_ip_buf[n].buf_addr = ipmem_ptr[n];
+		aio_ip_buf[n].buf_len = AACTEST_IBUFSZ;
+		aio_ip_buf[n].data_len = 0; // Driver will notify actual size 
+		aio_ip_buf[n].private_data = (void *)n; //Index
+	}
+	// Send n-1 write buffer
+	for (n = 0; n < (AACTEST_NUM_IBUF-1); n++) {
+	 	aio_buf.buf_addr = aio_ip_buf[n].buf_addr;
+		aio_buf.buf_len = aio_ip_buf[n].buf_len;
+		if ((sz = fill_buffer_8660_pb(aio_buf.buf_addr, in_size, audio_data)) < 0)
+			goto err_state2;
+		aio_buf.data_len = sz;
+		aio_ip_buf[n].data_len = sz; 
+		aio_buf.private_data = aio_ip_buf[n].private_data;
+		printf("ASYNC_WRITE addr %p len %d\n", aio_buf.buf_addr,
+			aio_buf.buf_len);
+		printf("fill_buffer returned %d\n", sz);
+		rc = ioctl(afd, AUDIO_ASYNC_WRITE, &aio_buf);
+		if(rc < 0) {
+			printf( "error on async write=%d\n",rc);
+			goto err_state2;
+		}
+	}
+	//Indicate available free buffer as (n-1)
+	in_free_indx = AACTEST_NUM_IBUF-1;
+	pthread_create(&evt_thread, NULL, aac_dec_event_8660, (void *) audio_data);
+	pthread_join(evt_thread, NULL);
+	printf("AUDIO_STOP as event thread completed\n");
+done:
+	rc = 0;
+	ioctl(afd, AUDIO_STOP, 0);
+err_state2:
+	if (audio_data->mode) {
+		for (n = 0; n < AACTEST_NUM_OBUF; n++) {
+			munmap(opmem_ptr[n], AACTEST_OBUFSZ);
+			close(opmem_fd[n]);
+		}
+	}
+	for (n = 0; n < AACTEST_NUM_IBUF; n++) {
+		munmap(ipmem_ptr[n], AACTEST_IBUFSZ);
+		close(ipmem_fd[n]);
+	}
+	if (!audio_data->mode) {
+#if defined(QC_PROP) && defined(AUDIOV2)
+		if (devmgr_unregister_session(dec_id, DIR_RX) < 0)
+			printf("error closing stream\n");
+#endif
+	}
+err_state1:
+	close(afd);
+	return rc;
+}
 
 const char *aacplay_help_txt =
 "Play aac file: type \n \
 echo \"playaac path_of_file -type=xxxx -repeat=x -rate=xxxx -cmode=x \
--profile=xxx -id=xxx -mode=x -bitstream=xxx -err_thr=x \
+-profile=xxx -id=xxx -mode=x -bitstream=xxx -err_thr=x -tgt = x\
 -out=path_of_outfile\" > %s \n \
 Sample rate of AAC file <= 48000 \n \
+tgt: 08 - for 8660 target, default 7k target \n \
 Type: adts, raw, loas, praw  \n \
  Type needs to be set to praw when bitstream is converted to\n \
  psuedo raw format as required by DSP.\n \
@@ -1983,7 +2696,13 @@ Mode 1 (Non-Tunneled) and 0 (Tunneled) \n \
 Bitstream lc, ltp, erlc or bsac \n \
 Error threshold value 0 to 0x7fff \n \
 Repeat 'x' no. of times, repeat infinitely if repeat = 0\n\
-Supported control command: pause, resume, flush, volume, quit\n ";
+Supported control command: pause, resume, flush, volume, quit \n\ 
+examples: \n\
+echo \"playaac path_of_file -id=xxx -mode=<0 or 1>\" > %s \n\
+echo \"control_cmd -id=xxx -cmd=pause\" > %s \n\
+echo \"control_cmd -id=xxx -cmd=resume\" > %s \n\
+echo \"control_cmd -id=xxx -cmd=flush\" > %s \n\
+echo \"control_cmd -id=xxx -cmd=volume -value=yyyy\" > %s \n";
 
 void aacplay_help_menu(void) {
 	printf(aacplay_help_txt, cmdfile);
