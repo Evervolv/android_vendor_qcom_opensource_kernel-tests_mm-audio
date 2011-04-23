@@ -53,6 +53,11 @@ typedef unsigned int  uint16;
 #define EOS			      1
 #define NUM_BITS_PER_SAMPLE		2
 
+#define AUDIO_AAC_MODE_AAC_LC            0x02
+#define AUDIO_AAC_MODE_AAC_P             0x05
+#define AUDIO_AAC_MODE_EAAC_P            0x1D
+#define AAC_FORMAT_ADTS                  65535
+
 #define MIN(A,B)	(((A) < (B))?(A):(B))
 
 struct sample_rate_idx {
@@ -76,6 +81,7 @@ static struct sample_rate_idx sample_idx_tbl[10] = {
 uint8   audaac_header[AUDAAC_MAX_ADTS_HEADER_LENGTH];
 unsigned int audaac_hdr_bit_index;
 static unsigned int aac_rec_bitrate;
+static unsigned int aac_type;// AAC_LC(2), AAC_P(5), EAAC_P(1d)
 int tickcount;
 /* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
 struct wav_header {		/* Simple wave header */
@@ -1641,7 +1647,6 @@ static void *aac_nt_enc_8660(void *arg)
 
 	fprintf(stderr,"prefill\n");
 	fprintf(stderr,"start encoding\n");
-	pcm_config.buffer_size = 1024 + sizeof(struct meta_in);
 	sleep(2);
 
 	while (1) {
@@ -1697,9 +1702,10 @@ int aac_rec_8660(struct audtest_config *config)
 	struct msm_audio_aac_enc_config aac_enc_cfg;
 	struct msm_audio_buf_cfg buf_cfg;
 	struct msm_audio_config pcm_cfg;
+	struct msm_audio_aac_config aac_config;
 
 	struct audio_pvt_data audio_data;
-	int sample_idx=0;
+	int sample_idx=0, aac_sample_rate = 24000;
 	unsigned loop;
 	unsigned framesize = 0;
 	int out_fd, afd;
@@ -1752,10 +1758,20 @@ int aac_rec_8660(struct audtest_config *config)
 	config->private_data = (struct audio_pvt_data *)&audio_data;
 
 	cnt = 0;
+	aac_sample_rate = config->sample_rate;
+	if ((format == AUDIO_AAC_FORMAT_RAW) &&
+		((aac_type == AUDIO_AAC_MODE_AAC_P) ||
+		 (aac_type == AUDIO_AAC_MODE_EAAC_P))){
+		if (config->sample_rate >= 24000) {
+			printf("aac_rec_8660(): ==Sample rate change for aac+/eaac+==\n");
+			aac_sample_rate = config->sample_rate/2;
+		}
+	}
+
 	for (loop=0; loop< sizeof(sample_idx_tbl) / \
 	sizeof(struct sample_rate_idx); \
 	loop++) {
-		if(sample_idx_tbl[loop].sample_rate == config->sample_rate) {
+		if(sample_idx_tbl[loop].sample_rate == aac_sample_rate) {
 			sample_idx  = sample_idx_tbl[loop].sample_rate_idx;
 		}
 	}
@@ -1799,6 +1815,23 @@ int aac_rec_8660(struct audtest_config *config)
 		perror("cannot write aac encoder  config");
 		goto fail;
 	}
+
+	if (ioctl(afd, AUDIO_GET_AAC_CONFIG, &aac_config)) {
+		perror("could not get aac config");
+		goto fail;
+	}
+
+	aac_config.format = config->fmt_config.aac.format_type;
+	aac_config.audio_object = config->fmt_config.aac.object_type;
+	aac_config.sbr_on_flag = config->fmt_config.aac.sbr_flag;
+	aac_config.sbr_ps_on_flag = config->fmt_config.aac.sbr_ps_flag;
+	aac_config.channel_configuration = config->channel_mode;
+
+	if (ioctl(afd, AUDIO_SET_AAC_CONFIG, &aac_config)) {
+		perror("could not set aac config");
+		goto fail;
+	}
+
 	printf("GET-BUF-CFG...\n");
 	if (ioctl(afd, AUDIO_GET_BUF_CFG, &buf_cfg)) {
 		perror("cannot get buf config");
@@ -1862,6 +1895,11 @@ int aac_rec_8660(struct audtest_config *config)
 			len = meta->frame_size;
 			if ( format == AUDIO_AAC_FORMAT_RAW)
 			{
+				printf("ADTS header: native_sample_rate = %d,"
+					   "aac_sample_rate = %d, sample_idx = %d, channel = %d\n",
+					   config->sample_rate, aac_sample_rate, sample_idx,
+					   config->channel_mode);
+
 				audaac_rec_install_adts_header_variable((len + 
 							AUDAAC_MAX_ADTS_HEADER_LENGTH), 
 							sample_idx, 
@@ -1942,6 +1980,11 @@ int aacrec_read_params(void) {
 		context->type = AUDIOTEST_TEST_MOD_AAC_ENC;
 		aac_rec_bitrate =  168000;
 		context->config.tgt = 0x07;
+		aac_type = AUDIO_AAC_MODE_AAC_LC;
+		context->config.fmt_config.aac.format_type = AUDIO_AAC_FORMAT_ADTS;
+		context->config.fmt_config.aac.object_type = AUDIO_AAC_OBJECT_LC;
+		context->config.fmt_config.aac.sbr_flag = 0;
+		context->config.fmt_config.aac.sbr_ps_flag = 0;
 	
 		token = strtok(NULL, " ");
 		while (token != NULL) {
@@ -1957,6 +2000,25 @@ int aacrec_read_params(void) {
 					atoi(&token[sizeof("-channel=") - 1]);
 			} else if (!memcmp(token, "-bps=", (sizeof("-bps=") - 1))) {
 					aac_rec_bitrate = atoi(&token[sizeof("-bps=") - 1]);
+			} else if (!memcmp(token, "-aac_type=", (sizeof("-aac_type=") - 1))) {
+					token = &token[sizeof("-aac_type=") - 1];
+					printf("aac object type is %s\n", token);
+					if (!strcmp(token, "aac_lc")) {
+						aac_type = AUDIO_AAC_MODE_AAC_LC;
+						context->config.fmt_config.aac.sbr_flag = 0;
+						context->config.fmt_config.aac.sbr_ps_flag = 0;
+					} else if (!strcmp(token, "aac+")) {
+						aac_type = AUDIO_AAC_MODE_AAC_P;
+						context->config.fmt_config.aac.sbr_flag = 1;
+						context->config.fmt_config.aac.sbr_ps_flag = 0;
+					} else if (!strcmp(token, "eaac+")) {
+						aac_type = AUDIO_AAC_MODE_EAAC_P;
+						context->config.fmt_config.aac.sbr_flag = 1;
+						context->config.fmt_config.aac.sbr_ps_flag = 1;
+					} else {
+						ret_val = -1;
+						break;
+					}
 			} else if (!memcmp(token, "-tgt=", (sizeof("-tgt=") - 1))) {
 					context->config.tgt = atoi(&token[sizeof("-tgt=") - 1]);
 			} else if (!memcmp(token, "-infile=", (sizeof("-infile=") - 1))) {
@@ -1991,12 +2053,45 @@ int aacrec_read_params(void) {
 		printf("format=%d frames_per_buf=%d config.sample_rate=%d,config.channel_mode=%d,aac_rec_bitrate=%d\n",
 			context->config.fmt_config.aac.format_type,context->config.frames_per_buf, 
 			context->config.sample_rate, context->config.channel_mode, aac_rec_bitrate);
+
 		if(context->config.tgt != 0x08 )
 		pthread_create( &context->thread, NULL, recaac_thread,
 							(void*) context);
-		else
+		else {
 			pthread_create( &context->thread, NULL, recaac_thread_8660,
 							(void*) context);
+			if ((context->config.sample_rate < 8000) && (context->config.sample_rate > 48000)) {
+				printf("ERROR in setting samplerate = %d. Supported "
+					  "samplerates are 8000, 11025, 12000, 16000, 22050, "
+					  "24000, 32000, 44100, 48000\n", context->config.sample_rate);
+					ret_val = -1;
+			} else {
+				if ((aac_type == AUDIO_AAC_MODE_AAC_P) || (aac_type == AUDIO_AAC_MODE_EAAC_P)) {
+					if (context->config.sample_rate < 24000) {
+						printf("ERROR in setting samplerate = %d. Supported"
+						 " samplerates for AAC+/EAAC+ are 24000, 32000,"
+						 " 44100, 48000\n", context->config.sample_rate);
+						ret_val = -1;
+					}
+				}
+			}
+			if ((context->config.channel_mode > 2) || (context->config.channel_mode <= 0)) {
+				printf("ERROR in setting channels = %d. Supported "
+					   "number of channels are 1 and 2\n", context->config.channel_mode);
+				ret_val = -1;
+			}
+			if (!((aac_type == AUDIO_AAC_MODE_AAC_LC) || (aac_type == AUDIO_AAC_MODE_AAC_P) || (aac_type == AUDIO_AAC_MODE_EAAC_P))) {
+				printf("ERROR in setting AAC profile = %d. Supported "
+							"profile values are aac_lc(2), aac+(5), eaac+(29)\n", aac_type);
+				ret_val = -1;
+			}
+			if (!((context->config.fmt_config.aac.format_type == AAC_FORMAT_ADTS)
+				  || (context->config.fmt_config.aac.format_type == AUDIO_AAC_FORMAT_RAW)))  {
+				printf("ERROR in setting AAC format = %d. Supported "
+							"formats are adts, raw\n", context->config.fmt_config.aac.format_type);
+				ret_val = -1;
+			}
+		}
 	}
 	return ret_val;
 }
@@ -2712,12 +2807,15 @@ const char *aacrec_help_txt =
 "Record aac file: type \n\
 echo \"recaac -infile=path_of_file -outfile=path_of_file \
 -id=xxx -rate=xxxx -channel=x -mode=x -bps=xx -frames=xxx -type=xxx \
--tgt=xxx \" > %s \n\
+-tgt=xxx -aac_type=xxxx\" > %s \n\
 Sample rate of source <= 48000 \n \
 Channel mode 1 or 2 \n \
 bps: bit per second 64k to 384k \n \
 frames: number of frames per buffer valid for 8660 \n \
 tgt :08 for 8660, by default target type set to 7k \n \
+type: AAC format types, adts or raw \n \
+aac_type: AAC object types, give any one of below strings \n \
+aac_lc or aac_plus or eaac_plus \n \
 Supported control command: N/A \n ";
 
 void aacrec_help_menu(void) {
