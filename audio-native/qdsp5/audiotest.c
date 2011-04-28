@@ -126,7 +126,7 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 	adpcm_play_control_handler, voiceenc_control_handler,
 	NULL, fm_play_control_handler, lpa_play_control_handler,
 	sbc_rec_control_handler,
-#ifdef defined(QC_PROP) && defined(QDSP6V2)
+#if defined(QC_PROP) && defined(QDSP6V2)
 	mvs_lp_test_control_handler,
 #else
 	NULL,
