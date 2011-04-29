@@ -112,6 +112,7 @@ typedef struct TIMESTAMP{
 } __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in{
+	unsigned char reserved[18];
 	unsigned short offset;
 	TIMESTAMP ntimestamp;
 	unsigned int nflags;
@@ -146,6 +147,7 @@ struct meta_out_8660_pb{
 } __attribute__ ((packed));
 
 struct dec_meta_out{
+	unsigned int reserved[7];
 	unsigned int num_of_frames;
 	struct meta_out_8660_pb meta_out_8660_pb[];
 } __attribute__ ((packed));
@@ -2362,7 +2364,7 @@ printf("*********************************\n");
 			break;
 		}
 		meta_out_ptr = (struct dec_meta_out *)aio_op_buf[out_free_indx].buf_addr;
-		meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(meta_out_ptr->num_of_frames)));
+		meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(struct dec_meta_out)));
 		printf("nr of frames %d\n", meta_out_ptr->num_of_frames);
 #ifdef DEBUG_LOCAL
 		printf("%s:msw ts 0x%8x, lsw_ts 0x%8x, nflags 0x%8x\n", __func__,
@@ -2370,7 +2372,7 @@ printf("*********************************\n");
 			meta_out_8660_pb->lsw_ts,
 			meta_out_8660_pb->nflags);
 #endif
-		first_frame_offset = meta_out_8660_pb->offset_to_frame + sizeof(meta_out_ptr->num_of_frames);
+		first_frame_offset = meta_out_8660_pb->offset_to_frame;
 		total_frame_size = 0;
 		if(meta_out_ptr->num_of_frames != 0xFFFFFFFF) {
 			// Go over all meta data field to find exact frame size
@@ -2389,7 +2391,7 @@ printf("*********************************\n");
 		}
 		printf("%s: Read Size %d offset %d\n", __func__,
 			total_frame_size, first_frame_offset);
-		write(fd, ((char *)aio_op_buf[out_free_indx].buf_addr + first_frame_offset),
+		write(fd, ((char *)aio_op_buf[out_free_indx].buf_addr + first_frame_offset + sizeof(struct dec_meta_out)),
 								total_frame_size);
 		total_len +=  total_frame_size;
 	}
@@ -2445,7 +2447,8 @@ static void *aac_write_thread_8660(void *arg)
 				aio_buf.data_len = sz;
 				aio_ip_buf[in_free_indx].data_len = sz;
 			}
-			printf("%s:ASYNC_WRITE addr %p len %d\n", __func__, aio_buf.buf_addr,aio_buf.data_len);
+			printf("%s:ASYNC_WRITE addr %p len %d, filled_sz = %d\n", __func__,
+				aio_buf.buf_addr, aio_buf.data_len, sz);
 			ioctl(afd, AUDIO_ASYNC_WRITE, &aio_buf);
 		}
 		wait_for_data_consumed();
@@ -2506,13 +2509,13 @@ static void *aac_dec_event_8660(void *arg)
 			case AUDIO_EVENT_READ_DONE:
 				if(event.event_payload.aio_buf.buf_len == 0)
 					printf("Warning buf_len Zero\n");
-				if (event.event_payload.aio_buf.data_len >= sizeof(struct dec_meta_out)) {
+				if (event.event_payload.aio_buf.data_len >= 0) {
 		  			printf("%s: READ_DONE: addr %p len %d\n", __func__,
 						event.event_payload.aio_buf.buf_addr,
 						event.event_payload.aio_buf.data_len);
 					meta_out_ptr = (struct dec_meta_out *)event.event_payload.aio_buf.buf_addr;
 					out_data_indx =(int) event.event_payload.aio_buf.private_data;
-					meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(meta_out_ptr->num_of_frames)));
+					meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(struct dec_meta_out)));
 					//OutPut EOS reached
 					if (meta_out_8660_pb->nflags == EOS) {
 			  			eof = 1;
@@ -2521,7 +2524,8 @@ static void *aac_dec_event_8660(void *arg)
 					}
 					data_available();
 				} else {
-					printf("%s:AUDIO_EVENT_READ_DONE:unexpected length\n", __func__);
+					printf("%s:AUDIO_EVENT_READ_DONE:unexpected length = %d\n",
+						   __func__, event.event_payload.aio_buf.data_len);
 				}
 		 		break;
 			case AUDIO_EVENT_WRITE_DONE:
@@ -2687,7 +2691,7 @@ static int aac_start_8660(struct audtest_config *clnt_config)
                         }
 			// Read buffers local structure
 		 	aio_op_buf[n].buf_addr = opmem_ptr[n];
-			aio_op_buf[n].buf_len = out_size + sizeof(struct dec_meta_out); 
+			aio_op_buf[n].buf_len = out_size;
 			aio_op_buf[n].data_len = 0; // Driver will notify actual size 
 			aio_op_buf[n].private_data = (void *)n; //Index
 		}
@@ -2736,9 +2740,8 @@ static int aac_start_8660(struct audtest_config *clnt_config)
 		aio_buf.data_len = sz;
 		aio_ip_buf[n].data_len = sz; 
 		aio_buf.private_data = aio_ip_buf[n].private_data;
-		printf("ASYNC_WRITE addr %p len %d\n", aio_buf.buf_addr,
-			aio_buf.buf_len);
-		printf("fill_buffer returned %d\n", sz);
+		printf("ASYNC_WRITE addr %p len = %d, filled_sz = %d\n", aio_buf.buf_addr,
+			aio_buf.data_len, sz);
 		rc = ioctl(afd, AUDIO_ASYNC_WRITE, &aio_buf);
 		if(rc < 0) {
 			printf( "error on async write=%d\n",rc);
