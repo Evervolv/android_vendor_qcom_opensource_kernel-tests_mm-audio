@@ -160,12 +160,14 @@ static pthread_mutex_t avail_lock;
 static pthread_cond_t avail_cond;
 static pthread_mutex_t consumed_lock;
 static pthread_cond_t consumed_cond;
+static pthread_mutex_t aac_ref_lock;
 static int data_is_available = 0;
 static int data_is_consumed = 0;
 static int in_free_indx;
 static int in_data_indx;
 static int out_free_indx;
 static int out_data_indx;
+static int aac_read_buf_ref_cnt = 0;
 
 #define AACTEST_IBUFSZ (32*1024)
 #define AACTEST_NUM_IBUF 2
@@ -2362,6 +2364,10 @@ printf("*********************************\n");
 		if (ioctl(afd, AUDIO_ASYNC_READ, &aio_buf) < 0) {
 			printf("error on async read\n");
 			break;
+		} else {
+			pthread_mutex_lock(&aac_ref_lock);
+			aac_read_buf_ref_cnt++;
+			pthread_mutex_unlock(&aac_ref_lock);
 		}
 		meta_out_ptr = (struct dec_meta_out *)aio_op_buf[out_free_indx].buf_addr;
 		meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(struct dec_meta_out)));
@@ -2516,6 +2522,11 @@ static void *aac_dec_event_8660(void *arg)
 					meta_out_ptr = (struct dec_meta_out *)event.event_payload.aio_buf.buf_addr;
 					out_data_indx =(int) event.event_payload.aio_buf.private_data;
 					meta_out_8660_pb = (struct meta_out_8660_pb *)(((char *)meta_out_ptr + sizeof(struct dec_meta_out)));
+					if (aac_read_buf_ref_cnt) {
+						pthread_mutex_lock(&aac_ref_lock);
+						aac_read_buf_ref_cnt--;
+						pthread_mutex_unlock(&aac_ref_lock);
+					}
 					//OutPut EOS reached
 					if (meta_out_8660_pb->nflags == EOS) {
 			  			eof = 1;
@@ -2544,6 +2555,28 @@ static void *aac_dec_event_8660(void *arg)
 					printf("%s:AUDIO_EVENT_WRITE_DONE:unexpected length\n", __func__);
 				}
 				break;
+			case AUDIO_EVENT_STREAM_INFO:
+				{
+				printf("aac_dec_event_8660: STREAM_INFO EVENT FROM DRIVER\n");
+				printf("chan_info : %d, sample_rate : %d\n",
+					   event.event_payload.stream_info.chan_info,
+					   event.event_payload.stream_info.sample_rate);
+#ifdef AUDIOV2
+				if (audio_data->mode) {
+					audio_data->outport_flush_enable = 1;
+					ioctl(afd, AUDIO_OUTPORT_FLUSH, 0);
+					audio_data->outport_flush_enable = 0;
+					printf("aac_dec_event_8660: outport flush complete. "
+						   "trigger async_read\n");
+					if (aac_read_buf_ref_cnt == 0) {
+						data_available();
+					}
+				}
+#endif
+				}
+				break;
+
+
 			default:
 				printf("%s: -Unknown event- %d\n", __func__, event.event_type);
 				break;
@@ -2663,6 +2696,7 @@ static int aac_start_8660(struct audtest_config *clnt_config)
 	pthread_mutex_init(&avail_lock, 0);
 	pthread_cond_init(&consumed_cond, 0);
 	pthread_mutex_init(&consumed_lock, 0);
+	pthread_mutex_init(&aac_ref_lock, 0);
 	data_is_available = 0;
 	data_is_consumed = 0;
 	in_free_indx=0;
@@ -2706,7 +2740,12 @@ static int aac_start_8660(struct audtest_config *clnt_config)
 			if (ioctl(afd, AUDIO_ASYNC_READ, &aio_buf) < 0) {
 				printf("error on async read\n");
 				goto err_state2;
+			} else {
+				pthread_mutex_lock(&aac_ref_lock);
+				aac_read_buf_ref_cnt++;
+				pthread_mutex_unlock(&aac_ref_lock);
 			}
+
 		}
 		//Indicate available free buffer as (n-1)
 		out_free_indx = AACTEST_NUM_OBUF-1;
