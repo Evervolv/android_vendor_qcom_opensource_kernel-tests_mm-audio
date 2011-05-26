@@ -761,8 +761,11 @@ int pcm_play_control_handler(void* private_data) {
                                                perror("could not get decoder session id\n");
                                        } else {
                                                printf("session %d - volume %d \n", dec_id, volume);
-                                               rc = msm_set_volume(dec_id, volume);
-                                               printf("session volume result %d\n", rc);
+                                               if ((volume >= 0) && (volume <= 100)) {
+                                                  rc = msm_set_volume(dec_id, volume);
+                                                  printf("session volume result %d\n", rc);
+                                               } else
+                                                  printf("session volume out of range\n");
                                        }
                                }
                        } else if (!strcmp(token, "eq")) {
