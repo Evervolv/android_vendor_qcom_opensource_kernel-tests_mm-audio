@@ -82,6 +82,7 @@ uint8   audaac_header[AUDAAC_MAX_ADTS_HEADER_LENGTH];
 unsigned int audaac_hdr_bit_index;
 static unsigned int aac_rec_bitrate;
 static unsigned int aac_type;// AAC_LC(2), AAC_P(5), EAAC_P(1d)
+static unsigned short aac_channels; /* 1 for mono,2 for stereo,6 for AAC 5.1 */
 int tickcount;
 /* http://ccrma.stanford.edu/courses/422/projects/WaveFormat/ */
 struct wav_header {		/* Simple wave header */
@@ -983,6 +984,8 @@ int aacplay_read_params(void) {
 			out_size = 8192 + sizeof(struct dec_meta_out);
 			in_size = 8192;
 			file_write = 1;
+			aac_channels = 2; /* default setting to stereo AAC, set to 6
+								 for AAC 5.1 */
 
 			token = strtok(NULL, " ");
 			while (token != NULL) {
@@ -1002,6 +1005,9 @@ int aacplay_read_params(void) {
 					context->config.channel_mode = 
 					atoi(&token[sizeof("-cmode=") - 1]);
 					printf("-->ch %d\n", context->config.channel_mode);
+				} else if (!memcmp(token,"-aac_channels=", (sizeof("-aac_channels=") - 1))) {
+					aac_channels = atoi(&token[sizeof("-aac_channels=") - 1]);
+					printf("AAC-->ch %d\n", aac_channels);
 				} else if (!memcmp(token,"-profile=", (sizeof("-profile=") - 1))) {
 					token = &token[sizeof("-profile=") - 1];
 					printf("aac profile %s\n", token);
@@ -2628,7 +2634,12 @@ static int aac_start_8660(struct audtest_config *clnt_config)
 	else
 		open_flags = O_WRONLY | O_NONBLOCK;
 
-	afd = open("/dev/msm_aac", open_flags);
+	if ((aac_channels == 1) || (aac_channels == 2)) {
+		afd = open("/dev/msm_aac", open_flags);
+	} else if (aac_channels == 6) {
+		afd = open("/dev/msm_multi_aac", open_flags);
+	} else
+		perror(" Invalid AAC Channels");
 
 	if (afd < 0) {
 		perror("Cannot open AAC device");
@@ -2672,7 +2683,7 @@ static int aac_start_8660(struct audtest_config *clnt_config)
 	aac_config.audio_object = clnt_config->fmt_config.aac.object_type;
 	aac_config.sbr_on_flag = clnt_config->fmt_config.aac.sbr_flag;
 	aac_config.sbr_ps_on_flag = clnt_config->fmt_config.aac.sbr_ps_flag;
-	aac_config.channel_configuration = clnt_config->channel_mode;
+	aac_config.channel_configuration = aac_channels;
 
 	if (ioctl(afd, AUDIO_SET_AAC_CONFIG, &aac_config)) {
 		perror("could not set AUDIO_SET_AAC_CONFIG_V2");
@@ -2820,14 +2831,15 @@ err_state1:
 const char *aacplay_help_txt =
 "Play aac file: type \n \
 echo \"playaac path_of_file -type=xxxx -repeat=x -rate=xxxx -cmode=x \
--profile=xxx -id=xxx -mode=x -bitstream=xxx -err_thr=x -tgt = x\
+-aac_channels=x -profile=xxx -id=xxx -mode=x -bitstream=xxx -err_thr=x -tgt = x\
 -out=path_of_outfile\" > %s \n \
 Sample rate of AAC file <= 48000 \n \
 tgt: 08 - for 8660 target, default 7k target \n \
 Type: adts, raw, loas, praw  \n \
  Type needs to be set to praw when bitstream is converted to\n \
  psuedo raw format as required by DSP.\n \
-Channel mode 1 or 2 \n \
+Channel mode(no. of channels for PCM) 1 or 2 \n \
+aac_channels(no. of channels for AAC) 1 or 2 or 6(for AAC 5.1) \n \
 Profile aac, aac+, eaac+ \n \
 Mode 1 (Non-Tunneled) and 0 (Tunneled) \n \
 Bitstream lc, ltp, erlc or bsac \n \
@@ -2842,7 +2854,7 @@ echo \"control_cmd -id=xxx -cmd=flush\" > %s \n\
 echo \"control_cmd -id=xxx -cmd=volume -value=yyyy\" > %s \n";
 
 void aacplay_help_menu(void) {
-	printf(aacplay_help_txt, cmdfile);
+	printf("%s\n", aacplay_help_txt);
 }
 
 const char *aacrec_help_txt =
