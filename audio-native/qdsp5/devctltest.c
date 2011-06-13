@@ -581,13 +581,9 @@ int devmgr_devctl_handler()
 							("-sid=") - 1))) {
 						sid = atoi(&token[sizeof
 							("-sid=") - 1]);
-#ifdef QDSP6V2
-						acdb_mapper_get_acdb_id_from_dev_id(dev_id, &rxdev_acdb_id);
-						acdb_loader_send_audio_cal(rxdev_acdb_id,
-							msm_get_device_capability(dev_id));
-#endif
-						msm_route_stream
-							(DIR_RX, sid, dev_id, 1);
+						devmgr_devid_rx = dev_id;
+						devmgr_register_session
+							(sid, DIR_RX);
 					}
 				}
 			} else if (!strcmp(token, "mute_dev")) {
@@ -616,13 +612,9 @@ int devmgr_devctl_handler()
 							("-sid=") - 1))) {
 						sid = atoi(&token[sizeof
 							("-sid=") - 1]);
-#ifdef QDSP6V2
-						acdb_mapper_get_acdb_id_from_dev_id(dev_id, &txdev_acdb_id);
-						acdb_loader_send_audio_cal(txdev_acdb_id,
-							msm_get_device_capability(dev_id));
-#endif
-						msm_route_stream
-							(DIR_TX, sid, dev_id, 1);
+						devmgr_devid_tx = dev_id;
+						devmgr_register_session
+							(sid, DIR_TX);
 					}
 				}
 			} else if (!strcmp(token, "rx_deroute")) {
