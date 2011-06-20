@@ -76,11 +76,6 @@ static int mvs_lp_test(struct audtest_config *config) {
 	ret = ioctl(fd, AUDIO_START, NULL);
 	printf("MVS start returned %d \n", ret);
 
-	/* Initialize ACDB */
-	printf("Initializing ACDB \n");
-	acdb_loader_deallocate_ACDB();
-	acdb_loader_init_ACDB();
-
 	/* Setup device and route voice to device. */
 	ret = msm_mixer_open("/dev/snd/controlC0", 0);
 	if (ret < 0)
@@ -152,9 +147,6 @@ static int mvs_lp_test(struct audtest_config *config) {
 	ret = msm_mixer_close();
 	if (ret < 0)
 		printf("Error %d closing mixer\n", ret);
-
-	/* De-initialize ACDB */
-	acdb_loader_deallocate_ACDB();
 
 	ret = ioctl(fd, AUDIO_STOP, NULL);
 	printf("MVS stop returned %d \n", ret);
