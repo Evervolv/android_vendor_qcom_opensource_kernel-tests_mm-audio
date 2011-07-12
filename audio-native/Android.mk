@@ -1,7 +1,7 @@
 AUDIO_NATIVE := $(call my-dir)
 include $(CLEAR_VARS)
 
-ifeq ($(TARGET_BOARD_PLATFORM), msm7k)
+ifeq ($(call is-board-platform-in-list,$(MSM7K_BOARD_PLATFORMS)),true)
     include $(AUDIO_NATIVE)/qdsp5/Android.mk
 else ifeq "$(findstring qsd8250,$(QCOM_TARGET_PRODUCT))" "qsd8250"
     include $(AUDIO_NATIVE)/qdsp6/Android.mk
