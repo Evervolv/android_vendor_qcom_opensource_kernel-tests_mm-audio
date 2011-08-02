@@ -3,7 +3,7 @@
  * Based on native pcm test application platform/system/extras/sound/playwav.c
  *
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1039,6 +1039,9 @@ int aacplay_read_params(void) {
 					} else if (!strcmp(token, "praw")) {
 						context->config.fmt_config.aac.format_type
 						= AUDIO_AAC_FORMAT_PSUEDO_RAW;
+					} else if (!strcmp(token, "adif")) {
+						context->config.fmt_config.aac.format_type
+						= AUDIO_AAC_FORMAT_ADIF;
 					} else {
 						ret_val = -1;
 						break;
@@ -1089,6 +1092,12 @@ int aacplay_read_params(void) {
 					context->config.file_name = token;
 				}
 				token = strtok(NULL, " ");
+			}
+			if (context->config.tgt == 0x07) {
+				if (context->config.fmt_config.aac.format_type == AUDIO_AAC_FORMAT_ADIF){
+					printf("adif contents not supported for 7k targets\n");
+					ret_val = -1;
+				}
 			}
 
 			if (!ret_val) {
@@ -2835,9 +2844,9 @@ echo \"playaac path_of_file -type=xxxx -repeat=x -rate=xxxx -cmode=x \
 -out=path_of_outfile\" > %s \n \
 Sample rate of AAC file <= 48000 \n \
 tgt: 08 - for 8660 target, default 7k target \n \
-Type: adts, raw, loas, praw  \n \
+Type: adts, raw, loas, praw, adif  \n \
  Type needs to be set to praw when bitstream is converted to\n \
- psuedo raw format as required by DSP.\n \
+ psuedo raw format as required by DSP. adif only supported for 8660 and 8960 \n \
 Channel mode(no. of channels for PCM) 1 or 2 \n \
 aac_channels(no. of channels for AAC) 1 or 2 or 6(for AAC 5.1) \n \
 Profile aac, aac+, eaac+ \n \
