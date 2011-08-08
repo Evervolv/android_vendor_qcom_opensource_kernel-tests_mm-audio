@@ -1000,10 +1000,12 @@ int aacplay_read_params(void) {
 					file_write = atoi(&token[sizeof("-wr=") - 1]);
 				}else if (!memcmp(token,"-rate=", (sizeof("-rate=") - 1))) {
 					context->config.sample_rate = atoi(&token[sizeof("-rate=") - 1]);
+					audio_data->freq = context->config.sample_rate;
 					printf("-->SR %d\n", context->config.sample_rate);
 				} else if (!memcmp(token,"-cmode=", (sizeof("-cmode=") - 1))) {
 					context->config.channel_mode = 
 					atoi(&token[sizeof("-cmode=") - 1]);
+					audio_data->channels  = context->config.channel_mode;
 					printf("-->ch %d\n", context->config.channel_mode);
 				} else if (!memcmp(token,"-aac_channels=", (sizeof("-aac_channels=") - 1))) {
 					aac_channels = atoi(&token[sizeof("-aac_channels=") - 1]);
