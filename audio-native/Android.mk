@@ -3,10 +3,8 @@ include $(CLEAR_VARS)
 
 ifeq ($(call is-board-platform-in-list,$(MSM7K_BOARD_PLATFORMS)),true)
     include $(AUDIO_NATIVE)/qdsp5/Android.mk
-else ifeq "$(findstring qsd8250,$(QCOM_TARGET_PRODUCT))" "qsd8250"
+else ifeq ($(call is-board-platform-in-list,$(QSD8K_BOARD_PLATFORMS)),true)
     include $(AUDIO_NATIVE)/qdsp6/Android.mk
-else ifeq "$(findstring qsd8650a,$(QCOM_TARGET_PRODUCT))" "qsd8650a"
-    include $(AUDIO_NATIVE)/qdsp6/Android.mk
-else ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+else ifeq ($(call is-board-platform,msm8660),true)
     include $(AUDIO_NATIVE)/qdsp5/Android.mk
 endif
