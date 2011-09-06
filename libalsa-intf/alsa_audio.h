@@ -27,6 +27,7 @@ struct pcm {
     unsigned rate;
     unsigned channels;
     unsigned flags;
+    unsigned format;
     int running:1;
     int underruns;
     unsigned buffer_size;
@@ -42,6 +43,8 @@ struct pcm {
     int device_no;
     int start;
 };
+
+#define FORMAT(v) SNDRV_PCM_FORMAT_##v
 
 #define PCM_OUT        0x00000000
 #define PCM_IN         0x10000000
@@ -121,6 +124,9 @@ struct mixer {
     unsigned count;
 };
 
+int get_format(const char* name);
+const char *get_format_name(int format);
+const char *get_format_desc(int format);
 struct pcm *pcm_open(unsigned flags, char *device);
 int pcm_close(struct pcm *pcm);
 int pcm_ready(struct pcm *pcm);

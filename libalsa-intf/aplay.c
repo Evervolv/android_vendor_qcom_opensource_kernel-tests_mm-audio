@@ -38,6 +38,8 @@
 #define LOG_NDEBUG 1
 static pcm_flag = 1;
 static debug = 0;
+static uint32_t play_max_sz = 2147483648LL;
+static int format = SNDRV_PCM_FORMAT_S16_LE;
 
 static struct option long_options[] =
 {
@@ -47,6 +49,7 @@ static struct option long_options[] =
     {"HW", 1, 0, 'D'},
     {"Rate", 1, 0, 'R'},
     {"channel", 1, 0, 'C'},
+    {"format", 1, 0, 'F'},
     {0, 0, 0, 0}
 };
 
@@ -85,8 +88,7 @@ static int set_params(struct pcm *pcm)
 
      param_set_mask(params, SNDRV_PCM_HW_PARAM_ACCESS,
                     (pcm->flags & PCM_MMAP)? SNDRV_PCM_ACCESS_MMAP_INTERLEAVED : SNDRV_PCM_ACCESS_RW_INTERLEAVED);
-     param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-                    SNDRV_PCM_FORMAT_S16_LE);
+     param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT, pcm->format);
      param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
                     SNDRV_PCM_SUBFORMAT_STD);
      param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_TIME, 1000);
@@ -99,7 +101,7 @@ static int set_params(struct pcm *pcm)
      param_set_hw_refine(pcm, params);
 
      if (param_set_hw_params(pcm, params)) {
-         fprintf(stderr, "Aplay:cannot set hw params");
+         fprintf(stderr, "Aplay:cannot set hw params\n");
          return -errno;
      }
      if (debug)
@@ -143,7 +145,7 @@ static int set_params(struct pcm *pcm)
     return 0;
 }
 
-int play_file(unsigned rate, unsigned channels, int fd, unsigned count,
+static int play_file(unsigned rate, unsigned channels, int fd,
               unsigned flags, const char *device)
 {
     struct pcm *pcm;
@@ -183,6 +185,7 @@ int play_file(unsigned rate, unsigned channels, int fd, unsigned count,
     pcm->channels = channels;
     pcm->rate = rate;
     pcm->flags = flags;
+    pcm->format = format;
     if (set_params(pcm)) {
         fprintf(stderr, "Aplay:params setting failed\n");
         pcm_close(pcm);
@@ -335,7 +338,7 @@ start_done:
             fprintf(stderr, "Aplay:bufsize = %d\n", bufsize);
         data = calloc(1, bufsize);
         if (!data) {
-            fprintf(stderr, "Aplay:could not allocate %d bytes\n", count);
+            fprintf(stderr, "Aplay:could not allocate %d bytes\n", bufsize);
             pcm_close(pcm);
             return -ENOMEM;
         }
@@ -351,6 +354,30 @@ start_done:
     fprintf(stderr, "Aplay: Done playing\n");
     pcm_close(pcm);
     return 0;
+}
+
+int play_raw(const char *fg, int rate, int ch, const char *device, const char *fn)
+{
+    int fd;
+    unsigned flag = 0;
+
+    if(!fn) {
+        fd = fileno(stdin);
+    } else {
+        fd = open(fn, O_RDONLY);
+        if (fd < 0) {
+            fprintf(stderr, "Aplay:aplay: cannot open '%s'\n", fn);
+            return fd;
+        }
+    }
+
+    if (!strncmp(fg, "M", sizeof("M")))
+        flag = PCM_MMAP;
+    else if (!strncmp(fg, "N", sizeof("N")))
+        flag = PCM_NMMAP;
+
+    fprintf(stderr, "aplay: Playing '%s':%s\n", fn, get_format_desc(format) );
+    return play_file(rate, ch, fd, flag, device);
 }
 
 int play_wav(const char *fg, int rate, int ch, const char *device, const char *fn)
@@ -373,10 +400,6 @@ int play_wav(const char *fg, int rate, int ch, const char *device, const char *f
             fprintf(stderr, "Aplay:aplay: cannot read header\n");
             return -errno;
         }
-        if (debug)
-            fprintf(stderr, "Aplay:aplay: %d ch, %d hz, %d bit, %s\n",
-                hdr.num_channels, hdr.sample_rate, hdr.bits_per_sample,
-                hdr.audio_format == FORMAT_PCM ? "PCM" : "unknown");
 
         if ((hdr.riff_id != ID_RIFF) ||
             (hdr.riff_fmt != ID_WAVE) ||
@@ -398,20 +421,19 @@ int play_wav(const char *fg, int rate, int ch, const char *device, const char *f
         hdr.sample_rate = rate;
         hdr.num_channels = ch;
     }
-    if (!strncmp(fg, "M", sizeof("M"))) {
-        fprintf(stderr, "Aplay:aplay: '%s' is playing in MMAP as input is %s\n", fn, fg);
+    if (!strncmp(fg, "M", sizeof("M")))
         flag = PCM_MMAP;
-    } else if (!strncmp(fg, "N", sizeof("N"))) {
-        fprintf(stderr, "Aplay:aplay: '%s' is playing in non-MMAP as input is %s\n", fn, fg);
+    else if (!strncmp(fg, "N", sizeof("N")))
         flag = PCM_NMMAP;
-    }
-    return play_file(hdr.sample_rate, hdr.num_channels, fd, hdr.data_sz, flag, device);
+    fprintf(stderr, "aplay: Playing '%s':%s\n", fn, get_format_desc(format) );
+
+    return play_file(hdr.sample_rate, hdr.num_channels, fd, flag, device);
 }
 
 int main(int argc, char **argv)
 {
     int option_index = 0;
-    int c;
+    int c,i;
     int ch = 2;
     int rate = 44100;
     char *mmap = "N";
@@ -420,7 +442,7 @@ int main(int argc, char **argv)
     int rc = 0;
 
     if (argc <2) {
-          printf("Usage: aplay [options] <file>\n"
+          printf("\nUsage: aplay [options] <file>\n"
                 "options:\n"
                 "-D <hw:C,D>	-- Alsa PCM by name\n"
                 "-M		-- Mmap stream\n"
@@ -428,10 +450,16 @@ int main(int argc, char **argv)
 		"-C             -- Channels\n"
 		"-R             -- Rate\n"
                 "-V		-- verbose\n"
+		"-F             -- Format\n"
                 "<file> \n");
-                return 0;
+           fprintf(stderr, "Formats Supported:\n");
+           for (i = 0; i <= SNDRV_PCM_FORMAT_LAST; ++i)
+               if (get_format_name(i))
+                   fprintf(stderr, "%s ", get_format_name(i));
+           fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
+           return 0;
      }
-     while ((c = getopt_long(argc, argv, "PVMD:R:C:", long_options, &option_index)) != -1) {
+     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:", long_options, &option_index)) != -1) {
        switch (c) {
        case 'P':
           pcm_flag = 0;
@@ -451,8 +479,11 @@ int main(int argc, char **argv)
        case 'C':
           ch = (int)strtol(optarg, NULL, 0);
           break;
+       case 'F':
+          format = get_format(optarg);
+          break;
        default:
-          printf("Usage: aplay [options] <file>\n"
+          printf("\nUsage: aplay [options] <file>\n"
                 "options:\n"
                 "-D <hw:C,D>	-- Alsa PCM by name\n"
                 "-M		-- Mmap stream\n"
@@ -460,7 +491,13 @@ int main(int argc, char **argv)
                 "-V		-- verbose\n"
                 "-C		-- Channels\n"
 		"-R             -- Rate\n"
+		"-F             -- Format\n"
                 "<file> \n");
+           fprintf(stderr, "Formats Supported:\n");
+           for (i = 0; i < SNDRV_PCM_FORMAT_LAST; ++i)
+               if (get_format_name(i))
+                   fprintf(stderr, "%s ", get_format_name(i));
+           fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
           return -EINVAL;
        }
 
@@ -478,7 +515,10 @@ int main(int argc, char **argv)
     }
 
     if (pcm_flag) {
-        rc = play_wav(mmap, rate, ch, device, filename);
+	 if (format == SNDRV_PCM_FORMAT_S16_LE) 
+             rc = play_wav(mmap, rate, ch, device, filename);
+         else
+             rc = play_raw(mmap, rate, ch, device, filename);
     } else {
         rc = play_wav(mmap, rate, ch, device, "dummy");
     }
