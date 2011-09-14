@@ -736,9 +736,9 @@ int pcmrec_read_params(void) {
 
 int pcm_play_control_handler(void* private_data) {
 	int  drvfd , ret_val = 0;
+	int volume;
 	char *token;
 #if defined(QC_PROP) && defined(AUDIOV2)
-	int volume;
 	int eq_preset;
 #endif
 
@@ -747,9 +747,9 @@ int pcm_play_control_handler(void* private_data) {
 		(token != NULL)) {
 		drvfd = (int) private_data;
 		if(!memcmp(token,"-cmd=", (sizeof("-cmd=") -1))) {
-#if defined(QC_PROP) && defined(AUDIOV2)
                        token = &token[sizeof("-cmd=") - 1];
                        printf("%s: cmd %s\n", __FUNCTION__, token);
+#if defined(QC_PROP) && defined(AUDIOV2)
                        if (!strcmp(token, "volume")) {
                                int rc;
                                unsigned short dec_id;
@@ -790,8 +790,23 @@ int pcm_play_control_handler(void* private_data) {
 			       printf("quit session\n");
 		       }
 #else
-			token = &token[sizeof("-id=") - 1];
-			printf("%s: cmd %s\n", __FUNCTION__, token);
+			if (!strcmp(token, "pause")) {
+				ioctl(drvfd, AUDIO_PAUSE, 1);
+			} else if (!strcmp(token, "resume")) {
+				ioctl(drvfd, AUDIO_PAUSE, 0);
+			} else if (!strcmp(token, "volume")) {
+				token = strtok(NULL, " ");
+				if (!memcmp(token, "-value=",
+					(sizeof("-value=") - 1))) {
+					volume =
+					atoi(&token[sizeof("-value=") - 1]);
+					ioctl(drvfd, AUDIO_SET_VOLUME, volume);
+					printf("volume:%d\n", volume);
+				}
+			} else if (!strcmp(token, "stop")) {
+			       quit = 1;
+			       printf("quit session\n");
+		       }
 #endif
 		}
 	} else {
