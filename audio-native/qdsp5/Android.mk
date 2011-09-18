@@ -26,7 +26,7 @@ ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-def += -DQC_PROP
 endif
 
-ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+ifeq ($(call is-board-platform,msm8660),true)
 mm-audio-native-def += -DQDSP6V2
 endif
 
@@ -39,7 +39,7 @@ include $(CLEAR_VARS)
 mm-audio-native-inc     := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 ifeq ($(strip $(QC_PROP)),true)
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
-ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+ifeq ($(call is-board-platform,msm8660),true)
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-acdb-util
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-iec-60958-61937
 mm-audio-native-inc     += $(TARGET_OUT_HEADERS)/mm-audio/audio-parsers
@@ -55,7 +55,7 @@ LOCAL_C_INCLUDES        := $(mm-audio-native-inc)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SHARED_LIBRARIES  := libaudioalsa
-ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+ifeq ($(call is-board-platform,msm8660),true)
 LOCAL_SHARED_LIBRARIES	+= libacdbloader
 LOCAL_SHARED_LIBRARIES  += libacdbmapper
 LOCAL_SHARED_LIBRARIES	+= lib_iec_60958_61937
@@ -85,7 +85,7 @@ LOCAL_SRC_FILES += fm_test.c
 LOCAL_SRC_FILES += lpatest.c
 ifeq ($(strip $(QC_PROP)),true)
 LOCAL_SRC_FILES += devctltest.c
-ifeq "$(findstring msm8660,$(QCOM_TARGET_PRODUCT))" "msm8660"
+ifeq ($(call is-board-platform,msm8660),true)
 LOCAL_SRC_FILES += mvstest.c
 LOCAL_SRC_FILES += hdmi_ac3.c
 endif
