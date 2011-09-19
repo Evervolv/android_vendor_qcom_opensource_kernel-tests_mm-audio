@@ -196,6 +196,7 @@ struct audiotest_case_type audiotest_case_list[] = {
 #ifdef QDSP6V2
         { "mvstest", mvstest_read_params, mvstest_help_menu, NULL } ,
 	{ "hdmi_ac3",hdmi_ac3_read_params,hdmi_ac3_help_menu, NULL },
+	{ "hdmi_dts",hdmi_dts_read_params,hdmi_dts_help_menu, NULL },
 #endif
 #endif
 	{ "playfm", fm_play_read_params, fm_play_help_menu, NULL },
