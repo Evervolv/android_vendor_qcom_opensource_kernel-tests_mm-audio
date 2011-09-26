@@ -358,7 +358,7 @@ SectionDevice
 		'MICBIAS1 CAPLESS Switch':1:0
 	EndSequence
 
-	ACDBID	11:2
+	ACDBID	4:2
 
 EndSection
 
@@ -435,7 +435,7 @@ SectionDevice
 		'MICBIAS1 CAPLESS Switch':1:0
 	EndSequence
 
-	ACDBID	5:2
+	ACDBID	12:2
 
 EndSection
 
@@ -462,7 +462,7 @@ SectionDevice
 		'MICBIAS3 CAPLESS Switch':1:0
 	EndSequence
 
-	ACDBID	12:2
+	ACDBID	13:2
 
 EndSection
 
@@ -781,6 +781,42 @@ EndSection
 SectionModifier
 	Name "Play MusicSpeaker ANC Headset"
 	Comment "Modifier for music playback"
+
+	EnableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia1':1:1
+	EndSequence
+
+	DisableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia1':1:0
+	EndSequence
+
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play MusicTTY Headset Rx"
+
+	EnableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia1':1:1
+	EndSequence
+
+	DisableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia1':1:0
+	EndSequence
+
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play MusicTTY Full Rx"
 
 	EnableSequence
 		'SLIMBUS_0_RX Audio Mixer MultiMedia1':1:1
@@ -1194,6 +1230,42 @@ SectionModifier
 
 	# ALSA PCMs
 	PlaybackPCM 4
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play LPATTY Headset Rx"
+
+	EnableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia3':1:1
+	EndSequence
+
+	DisableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia3':1:0
+	EndSequence
+
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play LPATTY Full Rx"
+
+	EnableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia3':1:1
+	EndSequence
+
+	DisableSequence
+		'SLIMBUS_0_RX Audio Mixer MultiMedia3':1:0
+	EndSequence
+
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
 	ACDBID 0:0
 
 EndSection

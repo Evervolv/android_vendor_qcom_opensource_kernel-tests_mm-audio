@@ -951,7 +951,7 @@ SectionModifier
 
 EndSection
 
-SectionVerb
+SectionModifier
 	Name "Play MusicTTY Headset Rx"
 
 	EnableSequence
@@ -969,7 +969,7 @@ SectionVerb
 
 EndSection
 
-SectionVerb
+SectionModifier
 	Name "Play MusicTTY Full Rx"
 
 	EnableSequence
@@ -1388,7 +1388,7 @@ SectionModifier
 
 EndSection
 
-SectionVerb
+SectionModifier
 	Name "Play LPATTY Headset Rx"
 
 	EnableSequence
@@ -1406,7 +1406,7 @@ SectionVerb
 
 EndSection
 
-SectionVerb
+SectionModifier
 	Name "Play LPATTY Full Rx"
 
 	EnableSequence
