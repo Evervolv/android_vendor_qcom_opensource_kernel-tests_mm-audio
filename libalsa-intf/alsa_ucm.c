@@ -454,6 +454,9 @@ static int snd_use_case_apply_voice_acdb(snd_use_case_mgr_t *uc_mgr, int use_cas
                 rx_id = uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[index].acdb_id;
                 tx_id = uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[use_case_index].acdb_id;
             }
+            if(rx_id == DEVICE_SPEAKER_RX_ACDB_ID && tx_id == DEVICE_HANDSET_TX_ACDB_ID) {
+                tx_id = DEVICE_SPEAKER_TX_ACDB_ID;
+            }
             if ((rx_id != uc_mgr->current_rx_device) ||
                 (tx_id != uc_mgr->current_tx_device)) {
                 uc_mgr->current_rx_device = rx_id; uc_mgr->current_tx_device = tx_id;
