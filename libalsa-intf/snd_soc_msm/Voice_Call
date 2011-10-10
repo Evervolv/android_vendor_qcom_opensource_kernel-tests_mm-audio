@@ -532,8 +532,8 @@ SectionDevice
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
 		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:90
-		'HPHR Volume':1:90
+		'HPHL Volume':1:80
+		'HPHR Volume':1:80
 	EndSequence
 
 	DisableSequence
@@ -567,8 +567,8 @@ SectionDevice
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
 		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:90
-		'HPHR Volume':1:90
+		'HPHL Volume':1:80
+		'HPHR Volume':1:80
 	EndSequence
 
 	DisableSequence
@@ -610,8 +610,8 @@ SectionDevice
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
 		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:90
-		'HPHR Volume':1:90
+		'HPHL Volume':1:80
+		'HPHR Volume':1:80
 		'ANC1 MUX':0:ADC4
 		'ANC2 MUX':0:ADC4
 		'ANC2 MUX':0:ADC3
@@ -661,8 +661,8 @@ SectionDevice
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
 		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:90
-		'HPHR Volume':1:90
+		'HPHL Volume':1:80
+		'HPHR Volume':1:80
 		'ANC1 MUX':0:ADC4
 		'ANC2 MUX':0:ADC4
 		'ANC2 MUX':0:ADC3
@@ -905,8 +905,8 @@ SectionDevice
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
 		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:90
-		'HPHR Volume':1:90
+		'HPHL Volume':1:80
+		'HPHR Volume':1:80
 	EndSequence
 
 	DisableSequence
@@ -957,8 +957,8 @@ SectionDevice
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
 		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:90
-		'HPHR Volume':1:90
+		'HPHL Volume':1:80
+		'HPHR Volume':1:80
 	EndSequence
 
 	DisableSequence
