@@ -320,17 +320,15 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
 		}
                 rec_size += bufsize;
                 hdr.data_sz += bufsize;
-                if (rec_size >= count) {
-                    hdr.riff_sz = hdr.data_sz + 44 - 8;
+                hdr.riff_sz = hdr.data_sz + 44 - 8;
+                lseek(fd, 0, SEEK_SET);
+                write(fd, &hdr, sizeof(hdr));
+                lseek(fd, 0, SEEK_END);
+                fprintf(stderr, " rec_size =%d count =%d\n", rec_size, count);
+                if (rec_size >= count)
                       break;
-                }
 	    }
     }
-    if (write(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
-	if (debug)
-            fprintf(stderr, "Arec:arec: cannot write header\n");
-    }
-
     close(fd);
     free(data);
     pcm_close(pcm);
@@ -370,8 +368,7 @@ int rec_wav(const char *fg, const char *device, int rate, int ch, const char *fn
             hdr.byte_rate = (rate * ch * hdr.bits_per_sample) / 8;
             hdr.block_align = ( hdr.bits_per_sample * ch ) / 8;
 	    hdr.data_id = ID_DATA;
-	    hdr.data_sz = rec_max_sz;
-            hdr.riff_sz = hdr.data_sz + 44 - 8;
+	    hdr.data_sz = 0;
 
             if (duration == 0) {
                 count = rec_max_sz;
@@ -379,7 +376,7 @@ int rec_wav(const char *fg, const char *device, int rate, int ch, const char *fn
                 count = rate * ch * 2;
                 count *= (off64_t)duration;
             }
-            hdr.data_sz = count < rec_max_sz ? count : rec_max_sz;
+            hdr.riff_sz = hdr.data_sz + 44 - 8;
 	    if (write(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 		if (debug)
 		    fprintf(stderr, "arec: cannot write header\n");
@@ -399,7 +396,7 @@ int rec_wav(const char *fg, const char *device, int rate, int ch, const char *fn
     } else if (!strncmp(fg, "N", sizeof("N"))) {
         flag = PCM_NMMAP;
     }
-    return record_file(hdr.sample_rate, hdr.num_channels, fd, hdr.data_sz, flag, device);
+    return record_file(hdr.sample_rate, hdr.num_channels, fd, count, flag, device);
 }
 
 static void signal_handler(int sig)
@@ -410,6 +407,8 @@ static void signal_handler(int sig)
     fprintf(stderr, "Arec:Aborted by signal %s...\n", strsignal(sig));
     fprintf(stderr, "Arec:lseeked to %d", (int) lseek(fd, 0, SEEK_SET));
     hdr.riff_sz = hdr.data_sz + 44 - 8;
+    fprintf(stderr, "Arec: hdr.data_sz =%d\n", hdr.data_sz);
+    fprintf(stderr, "Arec: hdr.riff_sz =%d\n", hdr.riff_sz);
     if (write(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
 	if (debug)
             fprintf(stderr, "Arec:arec: cannot write header\n");
@@ -435,6 +434,7 @@ int main(int argc, char **argv)
     int c;
     char *mmap = "N";
     char *device = "hw:0,0";
+    struct sigaction sa;
 
     if (argc < 2) {
           printf("Usage: arec [options] <file>\n"
@@ -497,6 +497,10 @@ int main(int argc, char **argv)
     } else {
         strncpy(filename, argv[optind++], 30);
     }
+
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = &signal_handler;
+    sigaction(SIGABRT, &sa, NULL);
 
     if (pcm_flag) {
         rec_wav(mmap, device, rate, ch, filename);
