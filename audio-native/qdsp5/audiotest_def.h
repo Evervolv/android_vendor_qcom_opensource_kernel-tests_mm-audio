@@ -128,11 +128,18 @@ struct audio_pvt_data {
 };
 
 #ifdef QDSP6V2
+struct g_min_max_rate{
+ int min_rate;
+ int max_rate;
+ };
+
 struct mvs_pvt_data {
  int g_mvs_mode;
  int g_rate_type;
+ struct g_min_max_rate g_min_max_rate;
  int g_rx_devid;
  int g_tx_devid;
+ int g_dtx_mode;
 };
 #endif
 

@@ -46,11 +46,30 @@
 #include "acdb-id-mapper.h"
 #endif
 
+#ifdef QDSP6V2
+struct test_gsm_header {
+ unsigned char bfi;
+ unsigned char sid;
+ unsigned char taf;
+ unsigned char ufi;
+};
+
+struct test_frame_type {
+	union {
+	unsigned int frame_type;
+	unsigned int packet_rate;
+	struct test_gsm_header test_gsm_frame_type;
+	}test_header;
+	unsigned int len;
+	unsigned char voc_pkts[640];
+};
+#else
 struct test_frame_type {
 	unsigned int frame_type;
 	unsigned int len;
 	unsigned char voc_pkts[320];
 };
+#endif
 
 static int lp_stop = 0;
 
@@ -69,6 +88,9 @@ static int mvs_lp_test(struct audtest_config *config) {
 	struct msm_audio_mvs_config mvs_config;
 	mvs_config.mvs_mode = mvs_data->g_mvs_mode;
 	mvs_config.rate_type = mvs_data->g_rate_type;
+	mvs_config.dtx_mode = mvs_data->g_dtx_mode;
+	mvs_config.min_max_rate.min_rate = mvs_data->g_min_max_rate.min_rate;
+	mvs_config.min_max_rate.max_rate = mvs_data->g_min_max_rate.max_rate;
 
 	ret = ioctl(fd, AUDIO_SET_MVS_CONFIG, &mvs_config);
 	printf("MVS ioctl returned %d \n", ret);
@@ -193,10 +215,16 @@ int mvstest_read_params(void) {
 					mvs_data->g_mvs_mode = atoi(&token[sizeof("-mvs_mode=") - 1]);
 				} else if (!memcmp(token,"-rate_type=", (sizeof("-rate_type=") - 1))) {
 					mvs_data->g_rate_type = atoi(&token[sizeof("-rate_type=") - 1]);
+				} else if (!memcmp(token,"-min_rate=",(sizeof("-min_rate=")-1))) {
+					mvs_data->g_min_max_rate.min_rate = atoi(&token[sizeof("-min_rate=") - 1]);
+				} else if (!memcmp(token,"-max_rate=",(sizeof("-max_rate=")-1))) {
+					mvs_data->g_min_max_rate.max_rate = atoi(&token[sizeof("-max_rate=") - 1]);
+				} else if (!memcmp(token,"-dtx_mode=", (sizeof("-dtx_mode=") - 1))) {
+					mvs_data->g_dtx_mode = atoi(&token[sizeof("-dtx_mode=") - 1]);
 				} else if (!memcmp(token,"-rx_devid=", (sizeof("-rx_devid=") - 1))) {
-                                        mvs_data->g_rx_devid = atoi(&token[sizeof("-rx_devid=") - 1]);
+					mvs_data->g_rx_devid = atoi(&token[sizeof("-rx_devid=") - 1]);
 				} else if (!memcmp(token,"-tx_devid=", (sizeof("-tx_devid=") - 1))) {
-                                        mvs_data->g_tx_devid = atoi(&token[sizeof("-tx-devid=") - 1]);
+					mvs_data->g_tx_devid = atoi(&token[sizeof("-tx-devid=") - 1]);
 				} else {
 					context->config.file_name = token;
 				}
@@ -240,13 +268,25 @@ push acdb file first:\n\
    adb shell \"mount -t vfat -o remount,rw /dev/block/mmcblk0p1 /system/\"\n\
    adb push audio_cal.acdb etc/   \n\
 \n\
-echo \"mvstest -id=xxx -mvs_mode=x -rate_type=x -rx_devid=x -tx_devid=x\" > tmp/audio_test \n\
+For EVRC,Qcelp 4gv use (dtx only for 4gv) \n\
+echo \"mvstest -id=xxx -mvs_mode=x -min_rate=x -max_rate=x -dtx_mode=x -rx_devid=x -tx_devid=x\" > tmp/audio_test \n\
+For other formats \n\
+echo \"mvstest -id=xxx -mvs_mode=x -rate_type=x -dtx_mode=x -rx_devid=x -tx_devid=x\" > tmp/audio_test \n\
 mvs mode: \n\
-	2:	MVS_MODE_IS127 		\n\
-	5:	MVS_MODE_AMR	   	\n\
-	9:	MVS_MODE_LINEAR_PCM	\n\
-	12:	MVS_MODE_PCM		\n\
-	13:     MVS_MODE_AMR_WB		\n\
+	1:     MVS_MODE_IS733 \n\
+	2:     MVS_MODE_IS127 \n\
+	3:     MVS_MODE_4GV_NB \n\
+	4:     MVS_MODE_4GV_WB \n\
+	5:     MVS_MODE_AMR \n\
+	6:     MVS_MODE_EFR \n\
+	7:     MVS_MODE_FR \n\
+	8:     MVS_MODE_HR \n\
+	9:     MVS_MODE_LINEAR_PCM \n\
+	10:    MVS_MODE_G711 \n\
+	12:    MVS_MODE_PCM \n\
+	13:    MVS_MODE_AMR_WB \n\
+	14:    MVS_MODE_G729A \n\
+	15:    MVS_MODE_G711A \n\
 rate type: \n\
 	0:	MVS_AMR_MODE_0475 	\n\
 	1:	MVS_AMR_MODE_0515	\n\
@@ -265,6 +305,10 @@ rate type: \n\
 	14:	MVS_AMR_MODE_1985	\n\
 	15:	MVS_AMR_MODE_2305	\n\
 	16:	MVS_AMR_MODE_2385	\n\
+					\n\
+dtx mode:\n\
+	enable - 1 \n\
+	disable - 0 \n\
 					\n\
 Supported control command: stop		\n\
 echo \"control_cmd -id=xxx -cmd=stop\" > /data/audio_test \n\
