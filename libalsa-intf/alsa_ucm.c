@@ -111,11 +111,11 @@ int snd_use_case_get_list(snd_use_case_mgr_t *uc_mgr,
     }
 
     if (!strncmp(identifier, "_verbs", 6)) {
-        while(strncmp(verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)) {
-            LOGV("Index:%d Verb:%s", index, verb_list[index]);
+        while(strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)) {
+            LOGV("Index:%d Verb:%s", index, uc_mgr->card_ctxt_ptr->verb_list[index]);
             index++;
         }
-        *list = verb_list;
+        *list = (char ***)uc_mgr->card_ctxt_ptr->verb_list;
         return index;
     } else  if (!strncmp(identifier, "_devices", 8)) {
         if (!strncmp(uc_mgr->card_ctxt_ptr->current_verb,
@@ -276,7 +276,7 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
             ident2 = strtok(NULL, "/");
             index = 0;
             verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
-            if((verb_index <= 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
+            if((verb_index < 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
                (uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl == NULL)) {
                 LOGE("Invalid current verb value: %s - %d", uc_mgr->card_ctxt_ptr->current_verb, verb_index);
                 return -EINVAL;
@@ -423,7 +423,7 @@ static int snd_use_case_apply_voice_acdb(snd_use_case_mgr_t *uc_mgr, int use_cas
     }
 
     verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
-    if((verb_index <= 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3))) {
+    if((verb_index < 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3))) {
         LOGE("Invalid current verb value: %s - %d", uc_mgr->card_ctxt_ptr->current_verb, verb_index);
         return -EINVAL;
     }
@@ -479,7 +479,7 @@ int get_use_case_index(snd_use_case_mgr_t *uc_mgr, const char *use_case)
     int ret = 0, index = 0, verb_index;
 
     verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
-    if((verb_index <= 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
+    if((verb_index < 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
        (uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl == NULL) ||
        (uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[index].case_name == NULL)) {
         LOGE("Invalid current verb value: %s - %d", uc_mgr->card_ctxt_ptr->current_verb, verb_index);
@@ -514,7 +514,7 @@ int snd_use_case_apply_mixer_controls(snd_use_case_mgr_t *uc_mgr,
     int i, ret = 0, index = 0, verb_index, use_case_index, mixer_count;
 
     verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
-    if((verb_index <= 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
+    if((verb_index < 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
        (uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl == NULL)) {
         LOGE("Invalid current verb value: %s - %d", uc_mgr->card_ctxt_ptr->current_verb, verb_index);
         return -EINVAL;
@@ -702,7 +702,7 @@ static int snd_use_case_check_device_for_disable(snd_use_case_mgr_t *uc_mgr, con
     int list_size, verb_index, index = 0, case_index = 0, ret = 0;
 
     verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
-    if((verb_index <= 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
+    if((verb_index < 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
        (uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl == NULL)) {
         LOGE("Invalid current verb value: %s - %d", uc_mgr->card_ctxt_ptr->current_verb, verb_index);
         return -EINVAL;
@@ -820,17 +820,17 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
     pthread_mutex_lock(&uc_mgr->card_ctxt_ptr->card_lock);
     if (!strncmp(identifier, "_verb", 5)) {
         /* Check if value is valid verb */
-        while (strncmp(verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)) {
-            if (!strncmp(verb_list[index], value, MAX_STR_LEN)) {
+        while (strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)) {
+            if (!strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], value, MAX_STR_LEN)) {
                 ret = 0;
                 break;
             }
             index++;
         }
-        if (ret < 0) {
+        if ((ret < 0) && (strncmp(value, SND_USE_CASE_VERB_INACTIVE, MAX_STR_LEN))) {
             LOGE("Invalid verb identifier value");
         } else {
-            LOGV("Index:%d Verb:%s", index, verb_list[index]);
+            LOGV("Index:%d Verb:%s", index, uc_mgr->card_ctxt_ptr->verb_list[index]);
             /* Disable the mixer controls for current use case
              * for all the enabled devices */
             if (strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_INACTIVE, MAX_STR_LEN)) {
@@ -890,8 +890,8 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
             ret = -EINVAL;
         } else {
             ret = 0;
-            while(strncmp(verb_list[index], uc_mgr->card_ctxt_ptr->current_verb, MAX_STR_LEN)) {
-                if (!strncmp(verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)){
+            while(strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], uc_mgr->card_ctxt_ptr->current_verb, MAX_STR_LEN)) {
+                if (!strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)){
                     ret = -EINVAL;
                     break;
                 }
@@ -902,7 +902,7 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
             LOGE("Invalid verb identifier value");
         } else {
             verb_index = index; index = 0; ret = 0;
-            LOGV("Index:%d Verb:%s", verb_index, verb_list[verb_index]);
+            LOGV("Index:%d Verb:%s", verb_index, uc_mgr->card_ctxt_ptr->verb_list[verb_index]);
             while(strncmp(uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index],
                 value, MAX_STR_LEN)) {
                 if (!strncmp(uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index],
@@ -948,6 +948,7 @@ int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr, const char *card_name)
 {
     snd_use_case_mgr_t *uc_mgr_ptr = NULL;
     int index, ret = -EINVAL;
+    char tmp[2];
 
     LOGV("snd_use_case_open(): card_name %s", card_name);
 
@@ -957,7 +958,7 @@ int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr, const char *card_name)
     }
 
     for (index = 0; index < (int)MAX_NUM_CARDS; index++) {
-        if(!strncmp(card_name, card_ctxt_list[index].card_name, MAX_STR_LEN)) {
+        if(!strncmp(card_name, card_mapping_list[index].card_name, MAX_STR_LEN)) {
             ret = 0;
             break;
         }
@@ -972,7 +973,36 @@ int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr, const char *card_name)
             return -ENOMEM;
         }
         uc_mgr_ptr->snd_card_index = index;
-        uc_mgr_ptr->card_ctxt_ptr = &card_ctxt_list[index];
+        uc_mgr_ptr->card_ctxt_ptr = (card_ctxt_t *)malloc(sizeof(card_ctxt_t));
+        if (uc_mgr_ptr->card_ctxt_ptr == NULL) {
+            LOGE("Failed to allocate memory for card context");
+            free(uc_mgr_ptr);
+            uc_mgr_ptr = NULL;
+            return -ENOMEM;
+        }
+        memset(uc_mgr_ptr->card_ctxt_ptr, 0, sizeof(uc_mgr_ptr->card_ctxt_ptr));
+        uc_mgr_ptr->card_ctxt_ptr->card_number = card_mapping_list[index].card_number;
+        uc_mgr_ptr->card_ctxt_ptr->card_name = (char *)malloc((strlen(card_name)+1)*sizeof(char));
+        if (uc_mgr_ptr->card_ctxt_ptr->card_name == NULL) {
+            LOGE("Failed to allocate memory for card name");
+            free(uc_mgr_ptr->card_ctxt_ptr);
+            free(uc_mgr_ptr);
+            uc_mgr_ptr = NULL;
+            return -ENOMEM;
+        }
+        strlcpy(uc_mgr_ptr->card_ctxt_ptr->card_name, card_name, MAX_STR_LEN);
+        uc_mgr_ptr->card_ctxt_ptr->control_device = (char *)malloc((strlen("/dev/snd/controlC")+2)*sizeof(char));
+        if (uc_mgr_ptr->card_ctxt_ptr->control_device == NULL) {
+            LOGE("Failed to allocate memory for control device string");
+            free(uc_mgr_ptr->card_ctxt_ptr->card_name);
+            free(uc_mgr_ptr->card_ctxt_ptr);
+            free(uc_mgr_ptr);
+            uc_mgr_ptr = NULL;
+            return -ENOMEM;
+        }
+        strlcpy(uc_mgr_ptr->card_ctxt_ptr->control_device, "/dev/snd/controlC", 18);
+        sprintf(tmp, "%d", uc_mgr_ptr->card_ctxt_ptr->card_number);
+        strncat(uc_mgr_ptr->card_ctxt_ptr->control_device, tmp, strlen(tmp));
         uc_mgr_ptr->device_list_count = 0;
         uc_mgr_ptr->modifier_list_count = 0;
         uc_mgr_ptr->current_device_list = NULL;
@@ -982,10 +1012,10 @@ int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr, const char *card_name)
         pthread_mutexattr_init(&uc_mgr_ptr->card_ctxt_ptr->card_lock_attr);
         pthread_mutex_init(&uc_mgr_ptr->card_ctxt_ptr->card_lock,
             &uc_mgr_ptr->card_ctxt_ptr->card_lock_attr);
+        strlcpy(uc_mgr_ptr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_INACTIVE, MAX_STR_LEN);
         /* Reset all mixer controls if any applied previously for the same card */
 	snd_use_case_mgr_reset(uc_mgr_ptr);
-        strlcpy(uc_mgr_ptr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_INACTIVE, MAX_STR_LEN);
-        uc_mgr_ptr->card_ctxt_ptr->current_verb_index = 0;
+        uc_mgr_ptr->card_ctxt_ptr->current_verb_index = -1;
         /* Parse config files and update mixer controls */
         ret = snd_ucm_parse(&uc_mgr_ptr);
         if(ret < 0) {
@@ -1047,9 +1077,12 @@ int snd_use_case_mgr_close(snd_use_case_mgr_t *uc_mgr)
         uc_mgr->card_ctxt_ptr->mixer_handle = NULL;
     }
     uc_mgr->snd_card_index = -1;
-    uc_mgr->card_ctxt_ptr = NULL;
     uc_mgr->current_tx_device = -1;
     uc_mgr->current_rx_device = -1;
+    free(uc_mgr->card_ctxt_ptr->control_device);
+    free(uc_mgr->card_ctxt_ptr->card_name);
+    free(uc_mgr->card_ctxt_ptr);
+    uc_mgr->card_ctxt_ptr = NULL;
     free(uc_mgr);
     uc_mgr = NULL;
     LOGV("snd_use_case_mgr_close(): card instace closed successfully");
@@ -1127,66 +1160,191 @@ int snd_use_case_mgr_reset(snd_use_case_mgr_t *uc_mgr)
     return ret;
 }
 
-/* Parse config files and update mixer controls for use cases
+/* Parse config files and update mixer controls for the use cases
  * uc_mgr - use case manager structure
  * Returns 0 on sucess, negative error code otherwise
  */
 static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr)
 {
     struct stat st;
-    card_mctrl_t *list;
-    int verb_count, device_count, modifier_count;
-    int fd, index = 0, i = 0, ret = 0, parse_count = 0;
-    char *read_buf, *next_str, *current_str, **verb_list, *verb_ptr;
-    char path[200], verb[MAX_STR_LEN];
+    int fd, verb_count, index = 0, ret = 0;
+    char *read_buf, *next_str, *current_str, *buf, *p, *verb_name, *file_name;
+    char path[200];
 
-    verb_count = snd_use_case_get_list((*uc_mgr), "_verbs", (const char ***)&verb_list);
+    strlcpy(path, CONFIG_DIR, (strlen(CONFIG_DIR)+1));
+    strlcat(path, (*uc_mgr)->card_ctxt_ptr->card_name, sizeof(path));
+    LOGV("master config file path:%s", path);
+    fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        LOGE("failed to open config file %s error %d\n", path, errno);
+        return -EINVAL;
+    }
+    if (fstat(fd, &st) < 0) {
+        LOGE("failed to stat %s error %d\n", path, errno);
+        close(fd);
+        return -EINVAL;
+    }
+    read_buf = (char *) mmap(0, st.st_size, PROT_READ | PROT_WRITE,
+               MAP_PRIVATE, fd, 0);
+    if (read_buf == MAP_FAILED) {
+        LOGE("failed to mmap file error %d\n", errno);
+        close(fd);
+        return -EINVAL;
+    }
+    current_str = read_buf;
+    verb_count = get_verb_count(current_str);
     (*uc_mgr)->card_ctxt_ptr->use_case_verb_list =
-        (use_case_verb_t *)malloc(verb_count*(sizeof(use_case_verb_t)));
-    while(strncmp(verb_list[index], SND_UCM_END_OF_LIST, 3)) {
+        (use_case_verb_t *)malloc((verb_count+2)*(sizeof(use_case_verb_t)));
+    (*uc_mgr)->card_ctxt_ptr->verb_list =
+        (char **)malloc((verb_count+2)*(sizeof(char *)));
+    verb_name = NULL;
+    while (*current_str != (char)EOF)  {
+        next_str = strchr(current_str, '\n');
+        if (!next_str)
+            break;
+        *next_str++ = '\0';
+        if (verb_name == NULL) {
+            buf = strstr(current_str, "SectionUseCase");
+            if (buf == NULL) {
+                if((current_str = next_str) == NULL)
+                    break;
+                else
+                    continue;
+            }
+            p = strtok(buf, ".");
+            while (p != NULL) {
+                p = strtok(NULL, "\"");
+                if (p == NULL)
+                    break;
+                verb_name = (char *)malloc((strlen(p)+1)*sizeof(char));
+                if(verb_name == NULL) {
+                    ret = -ENOMEM;
+                    break;
+                }
+                strlcpy(verb_name, p, (strlen(p)+1)*sizeof(char));
+                (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_name =
+                    (char *)malloc((strlen(verb_name)+1)*sizeof(char));
+                strlcpy((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_name,
+                    verb_name, MAX_STR_LEN);
+                (*uc_mgr)->card_ctxt_ptr->verb_list[index] =
+                    (char *)malloc((strlen(verb_name)+1)*sizeof(char));
+                strlcpy((*uc_mgr)->card_ctxt_ptr->verb_list[index], verb_name, MAX_STR_LEN);
+                break;
+            }
+        } else {
+            buf = strstr(current_str, "File");
+            if (buf == NULL) {
+                if((current_str = next_str) == NULL)
+                    break;
+                else
+                    continue;
+            }
+            p = strtok(buf, "\"");
+            while (p != NULL) {
+                p = strtok(NULL, "\"");
+                if (p == NULL)
+                    break;
+                file_name = (char *)malloc((strlen(p)+1)*sizeof(char));
+                if(file_name == NULL) {
+                    ret = -ENOMEM;
+                    break;
+                }
+                strlcpy(file_name, p, (strlen(p)+1)*sizeof(char));
+                break;
+            }
+            if (file_name != NULL) {
+                ret = snd_ucm_parse_verb(uc_mgr, file_name, index);
+                free(verb_name);
+                verb_name = NULL;
+            }
+            index++;
+        }
+        if((current_str = next_str) == NULL)
+            break;
+    }
+    munmap(read_buf, st.st_size);
+    close(fd);
+    if(ret < 0)
+        return ret;
+    (*uc_mgr)->card_ctxt_ptr->verb_list[index] =
+        (char *)malloc((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char));
+    strlcpy((*uc_mgr)->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN);
+    return ret;
+}
+
+/* Gets the number of use case verbs defined by master config file */
+static int get_verb_count(const char *nxt_str)
+{
+    char *current_str, *next_str, *str_addr, *buf, *p;
+    int count = 0;
+
+    next_str = (char *)malloc((strlen(nxt_str)+1)*sizeof(char));
+    if (next_str == NULL) {
+        LOGE("Failed to allocate memory");
+        return -ENOMEM;
+    }
+    strlcpy(next_str, nxt_str, ((strlen(nxt_str)+1)*sizeof(char)));
+    str_addr = next_str;
+    current_str = next_str;
+    while(1) {
+        next_str = strchr(current_str, '\n');
+        if (!next_str)
+            break;
+        *next_str++ = '\0';
+        buf = strstr(current_str, "SectionUseCase");
+        if (buf != NULL)
+            count++;
+        if (*next_str == (char)EOF)
+            break;
+        if((current_str = next_str) == NULL)
+            break;
+    }
+    free(str_addr);
+    return count;
+}
+
+/* Parse a use case verb config files and update mixer controls for the verb
+ * uc_mgr - use case manager structure
+ * file_name - use case verb config file name
+ * index - index of the verb in the list
+ * Returns 0 on sucess, negative error code otherwise
+ */
+static int snd_ucm_parse_verb(snd_use_case_mgr_t **uc_mgr, const char *file_name, int index)
+{
+    struct stat st;
+    card_mctrl_t *list;
+    int device_count, modifier_count;
+    int fd, ret = 0, parse_count = 0;
+    char *read_buf, *next_str, *current_str, *verb_ptr;
+    char path[200];
+
+    strlcpy(path, CONFIG_DIR, (strlen(CONFIG_DIR)+1));
+    strlcat(path, file_name, sizeof(path));
+    LOGV("path:%s", path);
+    while(1) {
         device_count = 0; modifier_count = 0;
         if (parse_count == 0) {
             (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_count = 0;
-            (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_name =
-                (char *)malloc((strlen(verb_list[index])+1)*sizeof(char));
-            strlcpy((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_name,
-                verb_list[index], MAX_STR_LEN);
             (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].device_list = NULL;
             (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].modifier_list = NULL;
             (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].card_ctrl = NULL;
         }
-        strlcpy(path, "/system/etc/", sizeof(path));
-        strlcat(path, (*uc_mgr)->card_ctxt_ptr->card_name, sizeof(path));
-        strlcat(path, "/", sizeof(path));
-        strlcpy(verb, verb_list[index], MAX_STR_LEN);
-        i = 0;
-        while(verb[i] != '\0') {
-            if(verb[i] == ' ') {
-                 verb[i] = '_';
-            }
-            i++;
-        }
-        strlcat(path, verb, sizeof(path));
-        LOGV("path:%s", path);
         fd = open(path, O_RDONLY);
         if (fd < 0) {
              LOGE("failed to open config file %s error %d\n", path, errno);
-             index++;
-             continue;
+             return -EINVAL;
         }
         if (fstat(fd, &st) < 0) {
             LOGE("failed to stat %s error %d\n", path, errno);
             close(fd);
-            index++;
-            continue;
+            return -EINVAL;
         }
         read_buf = (char *) mmap(0, st.st_size, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE, fd, 0);
         if (read_buf == MAP_FAILED) {
             LOGE("failed to mmap file error %d\n", errno);
             close(fd);
-            index++;
-            continue;
+            return -EINVAL;
         }
         current_str = read_buf;
         while (*current_str != (char)EOF)  {
@@ -1303,8 +1461,8 @@ static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr)
             list->acdb_id = 0;
             list->capability = 0;
             parse_count = 0;
+            break;
         }
-        index++;
     }
     return ret;
 }
@@ -1317,9 +1475,9 @@ static int snd_ucm_print(snd_use_case_mgr_t *uc_mgr)
 {
     int i, j, verb_index = 0;
 
-    while(strncmp(verb_list[verb_index], SND_UCM_END_OF_LIST, 3)) {
+    while(strncmp(uc_mgr->card_ctxt_ptr->verb_list[verb_index], SND_UCM_END_OF_LIST, 3)) {
         card_mctrl_t *list = uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl;
-        LOGD("\nuse case verb: %s\n", verb_list[verb_index]);
+        LOGD("\nuse case verb: %s\n", uc_mgr->card_ctxt_ptr->verb_list[verb_index]);
         if(uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].device_list) {
             LOGD("\tValid device list:");
             i = 0;
@@ -1643,7 +1801,7 @@ void snd_ucm_free_mixer_list(snd_use_case_mgr_t **uc_mgr)
 {
     int case_index = 0, index = 0, verb_index = 0;
 
-    while(strncmp(verb_list[verb_index], SND_UCM_END_OF_LIST, 3)) {
+    while(strncmp((*uc_mgr)->card_ctxt_ptr->verb_list[verb_index], SND_UCM_END_OF_LIST, 3)) {
         for(case_index = 0; case_index < (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].use_case_count; case_index++) {
             for(index = 0; index < (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_count; index++) {
                 if((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].control_name) {
@@ -1679,30 +1837,45 @@ void snd_ucm_free_mixer_list(snd_use_case_mgr_t **uc_mgr)
         }
         index = 0;
         while(1) {
-            if ((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index])
-                free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index]);
-            if (!strncmp((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index],
-                SND_UCM_END_OF_LIST, 3))
-                break;
+            if ((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index]) {
+                if (!strncmp((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index],
+                    SND_UCM_END_OF_LIST, 3)) {
+                    free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index]);
+                    break;
+                } else {
+                    free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list[index]);
+                    index++;
+                }
+            }
         }
         if ((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list)
                 free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].device_list);
         index = 0;
         while(1) {
-            if ((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index])
-                free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index]);
-            if (!strncmp((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index],
-                SND_UCM_END_OF_LIST, 3))
-                break;
+            if ((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index]) {
+                if (!strncmp((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index],
+                    SND_UCM_END_OF_LIST, 3)) {
+                    free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index]);
+                    break;
+                } else {
+                    free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index]);
+                    index++;
+                }
+            }
         }
         if ((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list)
                 free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list);
         if((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].use_case_name)
             free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].use_case_name);
+        if((*uc_mgr)->card_ctxt_ptr->verb_list[verb_index]) {
+            free((*uc_mgr)->card_ctxt_ptr->verb_list[verb_index]);
+        }
         verb_index++;
     }
     if((*uc_mgr)->card_ctxt_ptr->use_case_verb_list)
         free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list);
+    if((*uc_mgr)->card_ctxt_ptr->verb_list)
+        free((*uc_mgr)->card_ctxt_ptr->verb_list);
 }
 
 /* Add an identifier to the respective list

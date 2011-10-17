@@ -36,6 +36,7 @@ extern "C" {
 #include "alsa_ucm.h"
 #include "alsa_audio.h"
 #define SND_UCM_END_OF_LIST "end"
+#define CONFIG_DIR "/system/etc/snd_soc_msm/"
 
 /* ACDB Device ID macros */
 #define CAP_RX 0x1
@@ -69,9 +70,6 @@ extern "C" {
 #define MAX_UC_LEN 100
 /* Maximum string length of use case or device */
 #define MAX_STR_LEN 50
-
-/* Get mixer control count */
-#define NO_OF_CONTROLS(name) (sizeof(name)/sizeof(mixer_control_t))
 
 /* mixer control structure */
 typedef struct mixer_control {
@@ -124,6 +122,7 @@ typedef struct card_ctxt {
     pthread_mutexattr_t card_lock_attr;
     int current_verb_index;
     use_case_verb_t *use_case_verb_list;
+    char **verb_list;
 }card_ctxt_t;
 
 /** use case manager structure */
@@ -138,17 +137,21 @@ struct snd_use_case_mgr {
     card_ctxt_t *card_ctxt_ptr;
 };
 
-/* Context list per each sound card */
-static card_ctxt_t card_ctxt_list[] = {
-    { "snd_soc_msm", 0, "/dev/snd/controlC0", NULL, "Inactive", NULL, NULL, NULL, NULL, 0, NULL,
-    },
-};
-
-#define MAX_NUM_CARDS (sizeof(card_ctxt_list)/sizeof(struct card_ctxt))
+#define MAX_NUM_CARDS (sizeof(card_list)/sizeof(char *))
 
 /* Valid sound cards list */
 static const char *card_list[] = {
     "snd_soc_msm",
+};
+
+typedef struct card_mapping {
+    char card_name[50];
+    int card_number;
+}card_mapping_t;
+
+/* sound card name and number mapping */
+static card_mapping_t card_mapping_list[] = {
+    {"snd_soc_msm", 0},
 };
 
 /* New use cases, devices and modifiers added
@@ -184,66 +187,6 @@ static const char *card_list[] = {
 #define SND_USE_CASE_MOD_PLAY_VOIP       "Voice Call IP"
 #define SND_USE_CASE_MOD_CAPTURE_VOIP    "Capture VOIP"
 
-/* List of valid use cases */
-static const char *verb_list[] = {
-    SND_USE_CASE_VERB_INACTIVE,
-    SND_USE_CASE_VERB_HIFI,
-    SND_USE_CASE_VERB_HIFI_LOW_POWER,
-    SND_USE_CASE_VERB_VOICECALL,
-    SND_USE_CASE_VERB_IP_VOICECALL,
-    SND_USE_CASE_VERB_DIGITAL_RADIO,
-    SND_USE_CASE_VERB_FM_REC,
-    SND_USE_CASE_VERB_FM_A2DP_REC,
-    SND_USE_CASE_VERB_HIFI_REC,
-    SND_UCM_END_OF_LIST,
-};
-
-/* List of valid devices */
-static const char *device_list[] = {
-    SND_USE_CASE_DEV_NONE,
-    SND_USE_CASE_DEV_SPEAKER,    /* SPEAKER RX */
-    SND_USE_CASE_DEV_LINE,       /* BUILTIN-MIC TX */
-    SND_USE_CASE_DEV_HEADPHONES, /* HEADSET RX */
-    SND_USE_CASE_DEV_HEADSET,    /* HEADSET TX */
-    SND_USE_CASE_DEV_HANDSET,    /* HANDSET TX */
-    SND_USE_CASE_DEV_EARPIECE,   /* HANDSET RX */
-    SND_USE_CASE_DEV_ANC_HEADSET, /* ANC HEADSET RX */
-    SND_USE_CASE_DEV_SPEAKER_HEADSET, /* COMBO SPEAKER+HEADSET RX */
-    SND_USE_CASE_DEV_SPEAKER_ANC_HEADSET, /* COMBO SPEAKER+ANC HEADSET RX */
-    SND_USE_CASE_DEV_SPEAKER_FM_TX, /* COMBO SPEAKER+FM_TX RX */
-    SND_USE_CASE_DEV_BTSCO_NB_RX,      /* BTSCO RX*/
-    SND_USE_CASE_DEV_BTSCO_NB_TX,      /* BTSCO TX*/
-    SND_USE_CASE_DEV_BTSCO_WB_RX,      /* BTSCO RX*/
-    SND_USE_CASE_DEV_BTSCO_WB_TX,      /* BTSCO TX*/
-    SND_USE_CASE_DEV_FM_TX,       /* FM RX */
-    SND_USE_CASE_DEV_BLUETOOTH,  /* BLUETOOTH */
-    SND_USE_CASE_DEV_HDMI,       /* HDMI RX */
-    SND_USE_CASE_DEV_TTY_HEADSET_RX,    /*TTY HEADSET MONO RX */
-    SND_USE_CASE_DEV_TTY_HEADSET_TX,    /*TTY HEADSET MONO TX */
-    SND_USE_CASE_DEV_TTY_FULL_RX,    /*TTY FULL RX */
-    SND_USE_CASE_DEV_TTY_FULL_TX,    /*TTY FULL TX */
-    SND_USE_CASE_DEV_DUAL_MIC_BROADSIDE, /* DMIC Broadside */
-    SND_USE_CASE_DEV_DUAL_MIC_ENDFIRE,    /* DMIC Endfire */
-    SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_BROADSIDE, /* DMIC Broadside */
-    SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE,    /* DMIC Endfire */
-    SND_UCM_END_OF_LIST,
-};
-
-/* List of valid modifiers */
-static const char *mod_list[] = {
-    SND_USE_CASE_MOD_CAPTURE_VOICE,
-    SND_USE_CASE_MOD_CAPTURE_MUSIC,
-    SND_USE_CASE_MOD_PLAY_MUSIC,
-    SND_USE_CASE_MOD_PLAY_VOICE,
-    SND_USE_CASE_MOD_PLAY_FM,
-    SND_USE_CASE_MOD_CAPTURE_FM,
-    SND_USE_CASE_MOD_CAPTURE_A2DP_FM,
-    SND_USE_CASE_MOD_PLAY_LPA,
-    SND_USE_CASE_MOD_PLAY_VOIP,
-    SND_USE_CASE_MOD_CAPTURE_VOIP,
-    SND_UCM_END_OF_LIST,
-};
-
 /* List utility functions for maintaining enabled devices and modifiers */
 static int snd_ucm_add_ident_to_list(struct snd_ucm_ident_node **head, const char *value);
 static char *snd_ucm_get_value_at_index(struct snd_ucm_ident_node *head, int index);
@@ -253,6 +196,8 @@ static int snd_ucm_free_list(struct snd_ucm_ident_node **head);
 static void snd_ucm_print_list(struct snd_ucm_ident_node *head);
 static void snd_ucm_set_status_at_index(struct snd_ucm_ident_node *head, const char *ident, int status);
 static int snd_ucm_get_status_at_index(struct snd_ucm_ident_node *head, const char *ident);
+static int snd_ucm_parse_verb(snd_use_case_mgr_t **uc_mgr, const char *file_name, int index);
+static int get_verb_count(const char *nxt_str);
 /* Parse functions */
 static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr);
 static int snd_ucm_parse_section(snd_use_case_mgr_t **uc_mgr, char **cur_str, char **nxt_str, int verb_index);

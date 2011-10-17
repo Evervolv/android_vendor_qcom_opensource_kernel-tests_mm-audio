@@ -13,7 +13,7 @@ File "HiFi_Rec"
 Comment "Recording use case"
 }
 SectionUseCase."Voice Call" {
-File "Voice_call"
+File "Voice_Call"
 Comment "Voice Call use case"
 }
 SectionUseCase."Voice Call IP" {
@@ -27,5 +27,9 @@ Comment "FM Radio use case"
 SectionUseCase."FM REC" {
 File "FM_REC"
 Comment "FM Recording use case"
+}
+SectionUseCase."FM A2DP REC" {
+File "FM_A2DP_REC"
+Comment "FM A2DP playback use case"
 }
 # End of master file

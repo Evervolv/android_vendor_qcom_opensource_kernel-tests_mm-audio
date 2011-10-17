@@ -5,7 +5,8 @@ ifeq ($(strip $(BOARD_USES_ALSA_AUDIO)),true)
 prebuilt_files := snd_soc_msm/HiFi snd_soc_msm/FM_Digital_Radio \
                   snd_soc_msm/HiFi_Rec snd_soc_msm/Voice_Call_IP \
 		  snd_soc_msm/Voice_Call snd_soc_msm/FM_REC \
-		  snd_soc_msm/HiFi_Low_Power snd_soc_msm/FM_A2DP_REC
+		  snd_soc_msm/HiFi_Low_Power snd_soc_msm/FM_A2DP_REC \
+                  snd_soc_msm/snd_soc_msm
 $(call add-prebuilt-files, ETC, $(prebuilt_files))
 include $(CLEAR_VARS)
 #LOCAL_SRC_FILES:= aplay.c alsa_pcm.c alsa_mixer.c
