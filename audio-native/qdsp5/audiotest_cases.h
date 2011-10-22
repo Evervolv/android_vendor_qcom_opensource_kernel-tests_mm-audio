@@ -109,6 +109,8 @@ void devctl_help_menu(void);
 #ifdef QDSP6V2
 int hdmi_ac3_read_params(void);
 void hdmi_ac3_help_menu(void);
+int hdmi_dts_read_params(void);
+void hdmi_dts_help_menu(void);
 #endif
 
 #endif

@@ -88,6 +88,7 @@ LOCAL_SRC_FILES += devctltest.c
 ifeq ($(call is-board-platform,msm8660),true)
 LOCAL_SRC_FILES += mvstest.c
 LOCAL_SRC_FILES += hdmi_ac3.c
+LOCAL_SRC_FILES += hdmi_dts.c
 endif
 endif
 endif
