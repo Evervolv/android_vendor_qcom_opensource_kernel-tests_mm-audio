@@ -1212,12 +1212,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1233,12 +1233,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1254,12 +1254,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1275,12 +1275,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1296,12 +1296,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1317,12 +1317,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1338,12 +1338,12 @@ SectionModifier
 	EnableSequence
 		'Internal FM RX Volume':1:0
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:1
-		'SLIMBUS_0_RX Switch':1:1
+		'SLIMBUS_DL_HL Switch':1:1
 	EndSequence
 
 	DisableSequence
 		'SLIMBUS_0_RX Port Mixer INTERNAL_FM_TX':1:0
-		'SLIMBUS_0_RX Switch':1:0
+		'SLIMBUS_DL_HL Switch':1:0
 	EndSequence
 
 	# ALSA PCMs
