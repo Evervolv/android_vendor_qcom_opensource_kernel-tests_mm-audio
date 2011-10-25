@@ -35,9 +35,9 @@
 const char  *dev_file_name;
 static int quit, repeat;
 
-struct config_60958_61937 config_60958_61937;
-struct codec_61937_config codec_61937_config;
-struct audio_parser_codec_info audio_codec_info;
+static struct config_60958_61937 config_60958_61937;
+static struct codec_61937_config codec_61937_config;
+static struct audio_parser_codec_info audio_codec_info;
 
 static unsigned char *ac3_61937_burst;
 static unsigned char *hdmi_non_l_rep_per;
@@ -46,7 +46,7 @@ static unsigned char *ac3_frame;
 
 #define DEV_FILE_NAME   "/dev/msm_lpa_if_out"
 
-int hdmi_ac3_play(struct audtest_config *config)
+static int hdmi_ac3_play(struct audtest_config *config)
 {
 	struct msm_audio_config audio_config;
 	unsigned int ac3_file_sz;
@@ -229,6 +229,7 @@ int hdmi_ac3_play(struct audtest_config *config)
 
 	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_AC3;
 
+	memset(&codec_61937_config, sizeof(struct codec_61937_config), 0);
 	for (;;) {
 
 		rc = get_audio_frame(ac3_frame, max_ac3_frame_sz, &audio_codec_info);
@@ -307,7 +308,7 @@ error_alsa_mixer_open:
 }
 
 
-void* hdmi_ac3_thread(void* arg) {
+static void* hdmi_ac3_thread(void* arg) {
 	struct audiotest_thread_context *context =
 	(struct audiotest_thread_context*) arg;
 	int ret_val;
