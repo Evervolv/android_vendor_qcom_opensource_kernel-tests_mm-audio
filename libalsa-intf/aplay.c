@@ -417,6 +417,7 @@ int main(int argc, char **argv)
     char *mmap = "N";
     char *device = "hw:0,0";
     char *filename;
+    int rc = 0;
 
     if (argc <2) {
           printf("Usage: aplay [options] <file>\n"
@@ -477,12 +478,13 @@ int main(int argc, char **argv)
     }
 
     if (pcm_flag) {
-        play_wav(mmap, rate, ch, device, filename);
+        rc = play_wav(mmap, rate, ch, device, filename);
     } else {
-        play_wav(mmap, rate, ch, device, "dummy");
+        rc = play_wav(mmap, rate, ch, device, "dummy");
     }
     if (filename)
         free(filename);
-    return 0;
+
+    return rc;
 }
 

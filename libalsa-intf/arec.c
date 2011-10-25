@@ -435,6 +435,7 @@ int main(int argc, char **argv)
     char *mmap = "N";
     char *device = "hw:0,0";
     struct sigaction sa;
+    int rc = 0;
 
     if (argc < 2) {
           printf("Usage: arec [options] <file>\n"
@@ -503,12 +504,13 @@ int main(int argc, char **argv)
     sigaction(SIGABRT, &sa, NULL);
 
     if (pcm_flag) {
-        rec_wav(mmap, device, rate, ch, filename);
+        rc = rec_wav(mmap, device, rate, ch, filename);
     } else {
-        rec_wav(mmap, device, rate, ch, "dummy");
+        rc = rec_wav(mmap, device, rate, ch, "dummy");
     }
     if (filename)
         free(filename);
-    return 0;
+
+    return rc;
 }
 
