@@ -517,6 +517,27 @@ SectionDevice
 EndSection
 
 SectionDevice
+	Name "HDMI Tx"
+	Comment "HDMI Tx device"
+
+	EnableSequence
+		'SLIM_0_TX Channels':0:One
+		'SLIM TX7 MUX':0:DEC1
+		'DEC1 MUX':0:DMIC1
+		'MICBIAS1 CAPLESS Switch':1:1
+	EndSequence
+
+	DisableSequence
+		'SLIM TX7 MUX':0:ZERO
+		'DEC1 MUX':0:ZERO
+		'MICBIAS1 CAPLESS Switch':1:0
+	EndSequence
+
+	ACDBID	4:2
+
+EndSection
+
+SectionDevice
 	Name "DMIC Broadside"
 	Comment "Dual MIC Broadside Tx device"
 
@@ -1970,8 +1991,26 @@ SectionModifier
 	EndSequence
 
 	DisableSequence
-		'SLIM_0_RX_Voice Mixer CSVoice':1:0
+		'HDMI_RX_Voice Mixer CSVoice':1:0
 		'Voice_Tx Mixer SLIM_0_TX_Voice':1:0
+	EndSequence
+
+	# ALSA PCMs
+	PlaybackPCM 2
+	capturePCM 2
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play VoiceHDMI Tx"
+
+	EnableSequence
+		'HDMI_RX_Voice Mixer CSVoice':1:1
+		'Voice_Tx Mixer SLIM_0_TX_Voice':1:1
+	EndSequence
+
+	DisableSequence
 	EndSequence
 
 	# ALSA PCMs
