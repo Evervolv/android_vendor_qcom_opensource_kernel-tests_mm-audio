@@ -251,23 +251,24 @@ SectionDevice
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
 		'RX4 MIX1 INP1':0:RX2
-		'LINEOUT1 DAC Switch':1:1
-		'LINEOUT2 DAC Switch':1:1
-		'LINEOUT3 DAC Switch':1:1
-		'LINEOUT4 DAC Switch':1:1
-		'LINEOUT1 Volume':1:100
-		'LINEOUT2 Volume':1:100
+		'RX4 DSM MUX':0:CIC_OUT
+		'LINEOUT3 DAC GROUND Switch':1:1
+		'LINEOUT4 DAC GROUND Switch':1:1
+                'LINEOUT1 Volume':1:66
+                'LINEOUT2 Volume':1:66
+                'LINEOUT3 Volume':1:66
+                'LINEOUT4 Volume':1:66
 	EndSequence
 
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
 		'RX4 MIX1 INP1':0:ZERO
-		'LINEOUT1 DAC Switch':1:0
-		'LINEOUT2 DAC Switch':1:0
-		'LINEOUT3 DAC Switch':1:0
-		'LINEOUT4 DAC Switch':1:0
-		'LINEOUT1 Volume':1:0
-		'LINEOUT2 Volume':1:0
+		'LINEOUT3 DAC GROUND Switch':1:0
+		'LINEOUT4 DAC GROUND Switch':1:0
+                'LINEOUT1 Volume':1:0
+                'LINEOUT2 Volume':1:0
+                'LINEOUT3 Volume':1:0
+                'LINEOUT4 Volume':1:0
 	EndSequence
 
 	ACDBID	15:1
@@ -309,12 +310,13 @@ SectionDevice
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
 		'RX4 MIX1 INP1':0:RX2
-		'LINEOUT1 DAC Switch':1:1
-		'LINEOUT2 DAC Switch':1:1
-		'LINEOUT3 DAC Switch':1:1
-		'LINEOUT4 DAC Switch':1:1
-		'LINEOUT1 Volume':1:100
-		'LINEOUT2 Volume':1:100
+		'RX4 DSM MUX':0:CIC_OUT
+		'LINEOUT3 DAC GROUND Switch':1:1
+		'LINEOUT4 DAC GROUND Switch':1:1
+                'LINEOUT1 Volume':1:66
+                'LINEOUT2 Volume':1:66
+                'LINEOUT3 Volume':1:66
+                'LINEOUT4 Volume':1:66
 		'RX1 MIX1 INP1':0:RX1
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
@@ -326,12 +328,12 @@ SectionDevice
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
 		'RX4 MIX1 INP1':0:ZERO
-		'LINEOUT1 DAC Switch':1:0
-		'LINEOUT2 DAC Switch':1:0
-		'LINEOUT3 DAC Switch':1:0
-		'LINEOUT4 DAC Switch':1:0
-		'LINEOUT1 Volume':1:0
-		'LINEOUT2 Volume':1:0
+		'LINEOUT3 DAC GROUND Switch':1:0
+		'LINEOUT4 DAC GROUND Switch':1:0
+                'LINEOUT1 Volume':1:0
+                'LINEOUT2 Volume':1:0
+                'LINEOUT3 Volume':1:0
+                'LINEOUT4 Volume':1:0
 		'RX1 MIX1 INP1':0:ZERO
 		'RX2 MIX1 INP1':0:ZERO
 		'HPHL DAC Switch':1:0
@@ -352,12 +354,13 @@ SectionDevice
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
 		'RX4 MIX1 INP1':0:RX2
-		'LINEOUT1 DAC Switch':1:1
-		'LINEOUT2 DAC Switch':1:1
-		'LINEOUT3 DAC Switch':1:1
-		'LINEOUT4 DAC Switch':1:1
-		'LINEOUT1 Volume':1:100
-		'LINEOUT2 Volume':1:100
+		'RX4 DSM MUX':0:CIC_OUT
+		'LINEOUT3 DAC GROUND Switch':1:1
+		'LINEOUT4 DAC GROUND Switch':1:1
+                'LINEOUT1 Volume':1:66
+                'LINEOUT2 Volume':1:66
+                'LINEOUT3 Volume':1:66
+                'LINEOUT4 Volume':1:66
 		'RX1 MIX1 INP1':0:RX1
 		'RX2 MIX1 INP1':0:RX2
 		'HPHL DAC Switch':1:1
@@ -377,12 +380,12 @@ SectionDevice
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
 		'RX4 MIX1 INP1':0:ZERO
-		'LINEOUT1 DAC Switch':1:0
-		'LINEOUT2 DAC Switch':1:0
-		'LINEOUT3 DAC Switch':1:0
-		'LINEOUT4 DAC Switch':1:0
-		'LINEOUT1 Volume':1:0
-		'LINEOUT2 Volume':1:0
+		'LINEOUT3 DAC GROUND Switch':1:0
+		'LINEOUT4 DAC GROUND Switch':1:0
+                'LINEOUT1 Volume':1:0
+                'LINEOUT2 Volume':1:0
+                'LINEOUT3 Volume':1:0
+                'LINEOUT4 Volume':1:0
 		'RX1 MIX1 INP1':0:ZERO
 		'RX2 MIX1 INP1':0:ZERO
 		'HPHL DAC Switch':1:0
@@ -454,23 +457,24 @@ SectionDevice
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
 		'RX4 MIX1 INP1':0:RX2
-		'LINEOUT1 DAC Switch':1:1
-		'LINEOUT2 DAC Switch':1:1
-		'LINEOUT3 DAC Switch':1:1
-		'LINEOUT4 DAC Switch':1:1
-		'LINEOUT1 Volume':1:100
-		'LINEOUT2 Volume':1:100
+		'RX4 DSM MUX':0:CIC_OUT
+		'LINEOUT3 DAC GROUND Switch':1:1
+		'LINEOUT4 DAC GROUND Switch':1:1
+                'LINEOUT1 Volume':1:66
+                'LINEOUT2 Volume':1:66
+                'LINEOUT3 Volume':1:66
+                'LINEOUT4 Volume':1:66
 	EndSequence
 
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
 		'RX4 MIX1 INP1':0:ZERO
-		'LINEOUT1 DAC Switch':1:0
-		'LINEOUT2 DAC Switch':1:0
-		'LINEOUT3 DAC Switch':1:0
-		'LINEOUT4 DAC Switch':1:0
-		'LINEOUT1 Volume':1:0
-		'LINEOUT2 Volume':1:0
+		'LINEOUT3 DAC GROUND Switch':1:0
+		'LINEOUT4 DAC GROUND Switch':1:0
+                'LINEOUT1 Volume':1:0
+                'LINEOUT2 Volume':1:0
+                'LINEOUT3 Volume':1:0
+                'LINEOUT4 Volume':1:0
 	EndSequence
 
 	ACDBID	15:1
