@@ -34,6 +34,7 @@
 
 const char  *dev_file_name;
 static int quit, repeat;
+static int pause_flag = 0;
 
 static struct config_60958_61937 config_60958_61937;
 static struct codec_61937_config codec_61937_config;
@@ -53,7 +54,6 @@ static int hdmi_dts_play(struct audtest_config *config)
 	unsigned int actual_read_size;
 	unsigned char *dts_file_data;
 	FILE *fp;
-	FILE *fp1;
 	int afd;
 	int sz;
 	unsigned int i;
@@ -76,6 +76,8 @@ static int hdmi_dts_play(struct audtest_config *config)
 
 	/******************** read_file ***************************************/
 
+	while (repeat)  {
+	fprintf(stderr, "Repeat %d\n", repeat);
 	fp = fopen(config->file_name,"rb");
 	if (fp == NULL) {
 		fprintf(stderr, "hdmi_dts : cannot open '%s'\n",
@@ -211,108 +213,80 @@ static int hdmi_dts_play(struct audtest_config *config)
 	sz = dma_buf_sz;
 
 	 /******************** write_file ***************************************/
-
-        fp1 = fopen("/sdcard/60958_frames","wb");
-        if (fp1 == NULL) {
-                fprintf(stderr, "hdmi_dts : cannot open file 60958_frames file\n");
-                return -1;
-        }
 	
 	for (i = 0; i < audio_config.buffer_count; i++) {
 		get_60958_61937_pause_burst(hdmi_non_l_rep_per,
 				config_60958_61937.rep_per_60958, &config_60958_61937);
-		actual_write_size = fwrite((void*) hdmi_non_l_rep_per, 1, sz, fp1);
 
-		if (actual_write_size != sz) {
-			fprintf(stderr, "could not write DTS file 60958_frames\n");
-			fclose(fp1);
-			return -1;
-		}
-		frame_count++;
+		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
+                        fprintf(stderr, "could not write pause frame %d\n", i);
+                        rc = -1;
+                        goto error_dev_write;
+                }
 	}
+
+	fprintf(stderr, "start playback\n");
+
+        rc = ioctl(afd, AUDIO_START, 0);
+
+        if (rc < 0 ) {
+                fprintf(stderr, "%s: Unable to start driver\n", __func__);
+                rc = 1;
+                goto error_ioctl_audio_start;
+        }
 
 
 	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_DTS;
 	memset(&codec_61937_config, sizeof(struct codec_61937_config), 0);
 	for (;;) {
-
-		rc = get_audio_frame(dts_frame, max_dts_frame_sz, &audio_codec_info);
-
-		if (rc < 0 ) {
-			fprintf(stderr, "%s: no more aduio frames\n", __func__);
-			rc = 0;
-			break;
-		}
-
-		codec_61937_config.codec_type = dts_type;
-
-		codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit =
-			audio_codec_info.codec_config.dts_fr_info.dts_fr_sz_8bit;
-
-		codec_61937_config.codec_config.dts_fr_config.sample_rate =
-			audio_codec_info.codec_config.dts_fr_info.sample_rate;
-
-		codec_61937_config.codec_config.dts_fr_config.dts_type =
-			audio_codec_info.codec_config.dts_fr_info.dts_type;
-
-		codec_61937_config.codec_config.dts_fr_config.reverse_bytes =
-			audio_codec_info.codec_config.dts_fr_info.reverse_bytes;
-
-		cur_dts_frame_sz =
-			codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit;
-
-		get_61937_burst(dts_61937_burst,
-				config_60958_61937.sz_61937_burst,
-				dts_frame, cur_dts_frame_sz, &codec_61937_config);
-		
-		get_60958_frame(hdmi_non_l_rep_per,
-				config_60958_61937.rep_per_60958,
-				dts_61937_burst,
-				config_60958_61937.sz_61937_burst,
-				&codec_61937_config);
-		
-		actual_write_size = fwrite((void*) hdmi_non_l_rep_per, 1, sz, fp1);
-
-		if (actual_write_size != sz) {
-			fprintf(stderr, "could not write DTS file 60958_frames\n");
-			fclose(fp1);
-			return -1;
-		}
-		frame_count++;
-	}
-	fclose(fp1);
-	fprintf(stderr, "start playback\n");
-        fp1 = fopen("/sdcard/60958_frames","rb");
-        if (fp1 == NULL) {
-                fprintf(stderr, "hdmi_dts : cannot open file 60958_frames file\n");
-                return -1;
-        }
-	fprintf(stderr, "frame no %u\n", frame_count);
-	for (i=0; i<frame_count; i++) {
-		actual_read_size = fread((void*) hdmi_non_l_rep_per, 1, sz, fp1);
-
-		if (actual_read_size != sz) {
-			fprintf(stderr, "could not read 60958_frames  file %u\n", sz);
-			fclose(fp1);
-			return -1;
-		}
-
-		if(i == 2) {
-			rc = ioctl(afd, AUDIO_START, 0);
+		if(!pause_flag) {
+			rc = get_audio_frame(dts_frame, max_dts_frame_sz,
+						&audio_codec_info);
 
 			if (rc < 0 ) {
-				fprintf(stderr, "%s: Unable to start driver\n", __func__);
-				rc = 1;
-				goto error_ioctl_audio_start;
+				fprintf(stderr, "%s: no more aduio frames\n",
+					__func__);
+				rc = 0;
+				break;
 			}
+
+			codec_61937_config.codec_type = dts_type;
+
+			codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit =
+				audio_codec_info.codec_config.dts_fr_info.dts_fr_sz_8bit;
+
+			codec_61937_config.codec_config.dts_fr_config.sample_rate =
+				audio_codec_info.codec_config.dts_fr_info.sample_rate;
+
+			codec_61937_config.codec_config.dts_fr_config.dts_type =
+				audio_codec_info.codec_config.dts_fr_info.dts_type;
+
+			codec_61937_config.codec_config.dts_fr_config.reverse_bytes =
+				audio_codec_info.codec_config.dts_fr_info.reverse_bytes;
+
+			cur_dts_frame_sz =
+				codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit;
+
+			get_61937_burst(dts_61937_burst,
+					config_60958_61937.sz_61937_burst,
+					dts_frame, cur_dts_frame_sz,
+					&codec_61937_config);
+
+			get_60958_frame(hdmi_non_l_rep_per,
+					config_60958_61937.rep_per_60958,
+					dts_61937_burst,
+					config_60958_61937.sz_61937_burst,
+					&codec_61937_config);
+		} else {
+			get_60958_61937_pause_burst(hdmi_non_l_rep_per,
+					config_60958_61937.rep_per_60958,
+					&config_60958_61937);
 		}
 		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
-			fprintf(stderr, "could not write %s\n", DEV_FILE_NAME);
-			break;
-		}
+                        fprintf(stderr, "could not write %s\n", DEV_FILE_NAME);
+                        break;
+                }
 	}
-	fclose(fp1);
-	fprintf(stderr, "End of playback\n");
 
 error_ioctl_audio_start:
 error_dev_write:
@@ -344,6 +318,11 @@ error_alsa_mixer_open:
 	deinit_60958_61937_framer();
 	free(dts_file_data);
 
+	repeat--;
+	if (repeat > 0)
+		sleep(5);
+	}
+	fprintf(stderr, "End of playback\n");
 	return rc;
 }
 
@@ -370,7 +349,7 @@ int hdmi_dts_read_params(void) {
 	} else {
 		context->config.file_name = "/data/data.dts";
 		dev_file_name = "/dev/msm_lpa_if_out";
-		repeat = 0;
+		repeat = 1;
 		quit = 0;
 
 		token = strtok(NULL, " ");
@@ -381,6 +360,14 @@ int hdmi_dts_read_params(void) {
 			} else if (!memcmp(token, "-dev=",
 					(sizeof("-dev=") - 1))) {
 				dev_file_name = token + (sizeof("-dev=")-1);
+			} else if (!memcmp(token, "-pause=",
+					(sizeof("-pause=")-1))) {
+				pause_flag = atoi(&token[sizeof("-pause=") - 1]);
+				free_context(context);
+				return ret_val;
+			} else if (!memcmp(token, "-repeat=",
+					(sizeof("-repeat=") - 1))) {
+				repeat = atoi(&token[sizeof("-repeat=") - 1]);
 			} else {
 				context->config.file_name = token;
 			}
@@ -397,7 +384,9 @@ int hdmi_dts_read_params(void) {
 
 const char *hdmi_dts_help_txt =
 	"To Play dts file on hdmi: type \n"
-"echo \"hdmi_dts path_of_file -id=xxx  -dev=/dev/msm_lpa_if_out \" > tmp/audio_test \n";
+"echo \"hdmi_dts path_of_file -id=xxx  -dev=/dev/msm_lpa_if_out \" > tmp/audio_test \n"
+	"To Pause dts file on hdmi: type \n"
+"echo \"hdmi_dts -pause=0/1 \n";
 
 
 void hdmi_dts_help_menu(void) {

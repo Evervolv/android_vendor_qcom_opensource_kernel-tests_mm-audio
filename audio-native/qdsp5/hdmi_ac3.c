@@ -34,6 +34,7 @@
 
 const char  *dev_file_name;
 static int quit, repeat;
+static int pause_flag = 0;
 
 static struct config_60958_61937 config_60958_61937;
 static struct codec_61937_config codec_61937_config;
@@ -62,6 +63,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	int max_ac3_frame_sz, cur_ac3_frame_sz;
 	char *device_name = "hdmi_pass_through";
 	int rc = 0;
+	int exit_on_fail = 0;
 	unsigned int dma_buf_sz = 0;
 
 
@@ -69,7 +71,8 @@ static int hdmi_ac3_play(struct audtest_config *config)
 
 
 	/******************** read_file ***************************************/
-
+	while (repeat) {
+	fprintf(stderr, "Repeat %d\n", repeat);
 	fp = fopen(config->file_name,"rb");
 	if (fp == NULL) {
 		fprintf(stderr, "hdmi_ac3 : cannot open '%s'\n",
@@ -127,6 +130,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	if(alsa_control < 0) {
 		fprintf(stderr, "ERROR opening the ALSA mixer device\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_alsa_mixer_open;
 	}
 
@@ -135,6 +139,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	if (msm_en_device(dev_id,1)) {
 		fprintf(stderr, "could not enable device %s\n",
 				device_name);
+		exit_on_fail = 1;
 		goto error_en_alsa_dev;
 	}
 
@@ -142,6 +147,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	if (afd < 0) {
 		fprintf(stderr, "cannot open audio device\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_open_dev;
 	}
 
@@ -152,6 +158,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	if(rc == -1) {
 		fprintf(stderr, "get_60958_61937_config failed\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_get_60958_61937_config;
 	}
 	dma_buf_sz = config_60958_61937.dma_buf_sz;
@@ -164,6 +171,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 		fprintf(stderr, "could not allocate memory for ac3 61937 burst."
 			" burst size %u\n" , config_60958_61937.sz_61937_burst);
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_no_mem_ac3_61937_burst;
 	}
 
@@ -176,6 +184,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 			"rep per frames. ac3 60958rep per frame size %u\n" ,
 			config_60958_61937.rep_per_60958);
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_no_mem_hdmi_non_l_rep_per;
 	}
 
@@ -186,11 +195,13 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	if (ioctl(afd, AUDIO_SET_CONFIG, &dma_buf_sz)) {
 		fprintf(stderr, "could not set AUDIO_SET_IEC_CODEC_CONFIG\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_ioctl_audio_get_config;
 	}
 	if (ioctl(afd, AUDIO_GET_CONFIG, &audio_config)) {
 		fprintf(stderr, "could not get audio_config\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_ioctl_audio_get_config;
 	}
 
@@ -210,6 +221,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
 			fprintf(stderr, "could not write pause frame %d\n", i);
 			rc = -1;
+			exit_on_fail = 1;
 			goto error_dev_write;
 		}
 	}
@@ -221,6 +233,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	if (rc < 0 ) {
 		fprintf(stderr, "%s: Unable to start driver\n", __func__);
 		rc = 1;
+		exit_on_fail = 1;
 		goto error_ioctl_audio_start;
 	}
 
@@ -231,44 +244,52 @@ static int hdmi_ac3_play(struct audtest_config *config)
 
 	memset(&codec_61937_config, sizeof(struct codec_61937_config), 0);
 	for (;;) {
+		if (!pause_flag) {
+			rc = get_audio_frame(ac3_frame, max_ac3_frame_sz,
+						&audio_codec_info);
 
-		rc = get_audio_frame(ac3_frame, max_ac3_frame_sz, &audio_codec_info);
+			if (rc < 0 ) {
+				fprintf(stderr, "%s: no more aduio frames\n",
+					__func__);
+				rc = 0;
+				break;
+			}
 
-		if (rc < 0 ) {
-			fprintf(stderr, "%s: no more aduio frames\n", __func__);
-			rc = 0;
-			break;
+			codec_61937_config.codec_type = IEC_61937_CODEC_AC3;
+
+			codec_61937_config.codec_config.ac3_fr_config.ac3_fr_sz_16bit =
+				audio_codec_info.codec_config.ac3_fr_info.ac3_fr_sz_16bit;
+
+			codec_61937_config.codec_config.ac3_fr_config.bsmod =
+				audio_codec_info.codec_config.ac3_fr_info.bsmod;
+
+			codec_61937_config.codec_config.ac3_fr_config.sample_rate =
+				audio_codec_info.codec_config.ac3_fr_info.sample_rate;
+
+			codec_61937_config.codec_config.ac3_fr_config.reverse_bytes =
+				audio_codec_info.codec_config.ac3_fr_info.reverse_bytes;
+
+			cur_ac3_frame_sz =  2 *
+				codec_61937_config.codec_config.ac3_fr_config.ac3_fr_sz_16bit;
+
+			get_61937_burst(ac3_61937_burst,
+					config_60958_61937.sz_61937_burst,
+					ac3_frame, cur_ac3_frame_sz,
+					&codec_61937_config);
+
+			get_60958_frame(hdmi_non_l_rep_per,
+					config_60958_61937.rep_per_60958,
+					ac3_61937_burst,
+					config_60958_61937.sz_61937_burst,
+					&codec_61937_config);
+		} else {
+			get_60958_61937_pause_burst(hdmi_non_l_rep_per,
+					config_60958_61937.rep_per_60958,
+					&config_60958_61937);
 		}
-
-		codec_61937_config.codec_type = IEC_61937_CODEC_AC3;
-
-		codec_61937_config.codec_config.ac3_fr_config.ac3_fr_sz_16bit =
-			audio_codec_info.codec_config.ac3_fr_info.ac3_fr_sz_16bit;
-
-		codec_61937_config.codec_config.ac3_fr_config.bsmod =
-			audio_codec_info.codec_config.ac3_fr_info.bsmod;
-
-		codec_61937_config.codec_config.ac3_fr_config.sample_rate =
-			audio_codec_info.codec_config.ac3_fr_info.sample_rate;
-
-		codec_61937_config.codec_config.ac3_fr_config.reverse_bytes =
-			audio_codec_info.codec_config.ac3_fr_info.reverse_bytes;
-
-		cur_ac3_frame_sz =  2 *
-			codec_61937_config.codec_config.ac3_fr_config.ac3_fr_sz_16bit;
-
-		get_61937_burst(ac3_61937_burst,
-				config_60958_61937.sz_61937_burst,
-				ac3_frame, cur_ac3_frame_sz, &codec_61937_config);
-
-		get_60958_frame(hdmi_non_l_rep_per,
-				config_60958_61937.rep_per_60958,
-				ac3_61937_burst,
-				config_60958_61937.sz_61937_burst,
-				&codec_61937_config);
-
 		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
 			fprintf(stderr, "could not write %s\n", DEV_FILE_NAME);
+			exit_on_fail = 1;
 			break;
 		}
 	}
@@ -304,6 +325,15 @@ error_alsa_mixer_open:
 	deinit_60958_61937_framer();
 	free(ac3_file_data);
 
+	repeat--;
+	if (repeat > 0) {
+		if(exit_on_fail == 1)
+			goto exit;
+		sleep(5);
+	}
+	}
+	fprintf(stderr, "End of playback\n");
+exit:
 	return rc;
 }
 
@@ -330,7 +360,7 @@ int hdmi_ac3_read_params(void) {
 	} else {
 		context->config.file_name = "/data/data.ac3";
 		dev_file_name = "/dev/msm_lpa_if_out";
-		repeat = 0;
+		repeat = 1;
 		quit = 0;
 
 		token = strtok(NULL, " ");
@@ -344,11 +374,12 @@ int hdmi_ac3_read_params(void) {
 			} else if (!memcmp(token, "-repeat=",
 					(sizeof("-repeat=") - 1))) {
 				repeat = atoi(&token[sizeof("-repeat=") - 1]);
-				if (repeat == 0)
-					repeat = -1;
-				else
-					repeat--;
-			} else {
+			} else if (!memcmp(token, "-pause=",
+					(sizeof("-pause=")-1))) {
+				pause_flag = atoi(&token[sizeof("-pause=") - 1]);
+				free_context(context);
+				return ret_val;
+                        } else {
 				context->config.file_name = token;
 			}
 			token = strtok(NULL, " ");
@@ -364,7 +395,9 @@ int hdmi_ac3_read_params(void) {
 
 const char *hdmi_ac3_help_txt =
 	"To Play ac3 file on hdmi: type \n"
-"echo \"hdmi_ac3 path_of_file -id=xxx  -dev=/dev/msm_lpa_if_out \" > tmp/audio_test \n";
+"echo \"hdmi_ac3 path_of_file -id=xxx  -dev=/dev/msm_lpa_if_out \" > tmp/audio_test \n"
+	 "To Pause ac3 file on hdmi: type \n"
+"echo \"hdmi_ac3 -pause=0/1 \n";
 
 
 void hdmi_ac3_help_menu(void) {
