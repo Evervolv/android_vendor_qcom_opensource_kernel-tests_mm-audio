@@ -57,7 +57,6 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	int afd;
 	int sz;
 	unsigned int i;
-	int alsa_control;
 	unsigned char *ch;
 	int dev_id;
 	int max_ac3_frame_sz, cur_ac3_frame_sz;
@@ -124,15 +123,6 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	init_60958_61937_framer();
 
 	/********** end of read_file ******************************************/
-
-
-	alsa_control = msm_mixer_open("/dev/snd/controlC0", 0);
-	if(alsa_control < 0) {
-		fprintf(stderr, "ERROR opening the ALSA mixer device\n");
-		rc = -1;
-		exit_on_fail = 1;
-		goto error_alsa_mixer_open;
-	}
 
 	dev_id = msm_get_device(device_name);
 
@@ -237,6 +227,15 @@ static int hdmi_ac3_play(struct audtest_config *config)
 		goto error_ioctl_audio_start;
 	}
 
+	for (i = 0; i < 12; i++) {
+
+		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
+			fprintf(stderr, "could not write pause frame %d\n", i);
+			rc = -1;
+			exit_on_fail = 1;
+			goto error_dev_write;
+		}
+	}
 
 	sz = config_60958_61937.rep_per_60958;
 
@@ -315,11 +314,6 @@ error_open_dev:
 				device_name);
 
 error_en_alsa_dev:
-	alsa_control = msm_mixer_close();
-	if (alsa_control < 0)
-		fprintf(stderr, "Failed to close ALSA MIXER\n");
-
-error_alsa_mixer_open:
 	free(ac3_frame);
 	fclose(fp);
 	deinit_60958_61937_framer();
