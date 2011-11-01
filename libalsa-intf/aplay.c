@@ -40,6 +40,7 @@ static pcm_flag = 1;
 static debug = 0;
 static uint32_t play_max_sz = 2147483648LL;
 static int format = SNDRV_PCM_FORMAT_S16_LE;
+static int period = 0;
 
 static struct option long_options[] =
 {
@@ -50,6 +51,7 @@ static struct option long_options[] =
     {"Rate", 1, 0, 'R'},
     {"channel", 1, 0, 'C'},
     {"format", 1, 0, 'F'},
+    {"period", 1, 0, 'B'},
     {0, 0, 0, 0}
 };
 
@@ -91,7 +93,10 @@ static int set_params(struct pcm *pcm)
      param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT, pcm->format);
      param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
                     SNDRV_PCM_SUBFORMAT_STD);
-     param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_TIME, 1000);
+     if (period)
+         param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_BYTES, period);
+     else
+         param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_TIME, 10);
      param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
      param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
                     pcm->channels - 1 ? 32 : 16);
@@ -451,6 +456,7 @@ int main(int argc, char **argv)
 		"-R             -- Rate\n"
                 "-V		-- verbose\n"
 		"-F             -- Format\n"
+                "-B             -- Period\n"
                 "<file> \n");
            fprintf(stderr, "Formats Supported:\n");
            for (i = 0; i <= SNDRV_PCM_FORMAT_LAST; ++i)
@@ -459,7 +465,7 @@ int main(int argc, char **argv)
            fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
            return 0;
      }
-     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:", long_options, &option_index)) != -1) {
+     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:B:", long_options, &option_index)) != -1) {
        switch (c) {
        case 'P':
           pcm_flag = 0;
@@ -482,6 +488,9 @@ int main(int argc, char **argv)
        case 'F':
           format = get_format(optarg);
           break;
+       case 'B':
+          period = (int)strtol(optarg, NULL, 0);
+          break;
        default:
           printf("\nUsage: aplay [options] <file>\n"
                 "options:\n"
@@ -492,6 +501,7 @@ int main(int argc, char **argv)
                 "-C		-- Channels\n"
 		"-R             -- Rate\n"
 		"-F             -- Format\n"
+                "-B             -- Period\n"
                 "<file> \n");
            fprintf(stderr, "Formats Supported:\n");
            for (i = 0; i < SNDRV_PCM_FORMAT_LAST; ++i)
