@@ -30,6 +30,10 @@ ifeq ($(call is-board-platform,msm8660),true)
 mm-audio-native-def += -DQDSP6V2
 endif
 
+ifeq "$(findstring msm7627a,$(QCOM_TARGET_PRODUCT))" "msm7627a"
+mm-audio-native-def += -DAUDIO7X27A
+endif
+
 # ---------------------------------------------------------------------------------
 #                       Make the apps-test (mm-audio-native-test)
 # ---------------------------------------------------------------------------------
@@ -47,7 +51,6 @@ endif
 endif
 
 LOCAL_MODULE            := mm-audio-native-test
-LOCAL_MODULE_TAGS       := optional
 LOCAL_CFLAGS            := $(mm-audio-native-def)
 LOCAL_PRELINK_MODULE    := false
 
@@ -90,6 +93,10 @@ LOCAL_SRC_FILES += mvstest.c
 LOCAL_SRC_FILES += hdmi_ac3.c
 LOCAL_SRC_FILES += hdmi_dts.c
 endif
+endif
+else
+ifeq "$(findstring msm7627a,$(QCOM_TARGET_PRODUCT))" "msm7627a"
+LOCAL_SRC_FILES += voiceenctest.c
 endif
 endif
 
