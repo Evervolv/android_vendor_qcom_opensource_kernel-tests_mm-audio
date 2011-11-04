@@ -562,11 +562,11 @@ static int pcm_write_nmmap(struct pcm *pcm, void *data, unsigned count)
                 return -errno;
         }
         if (ioctl(pcm->fd, SNDRV_PCM_IOCTL_WRITEI_FRAMES, &x)) {
-            pcm->running = 0;
             if (errno == EPIPE) {
                     /* we failed to make our window -- try to restart */
                 LOGE("Underrun Error\n");
                 pcm->underruns++;
+                pcm->running = 0;
                 continue;
             }
             return errno;
@@ -606,11 +606,11 @@ int pcm_read(struct pcm *pcm, void *data, unsigned count)
             pcm->running = 1;
         }
         if (ioctl(pcm->fd, SNDRV_PCM_IOCTL_READI_FRAMES, &x)) {
-            pcm->running = 0;
             if (errno == EPIPE) {
                 /* we failed to make our window -- try to restart */
                 LOGE("Arec:Overrun Error\n");
                 pcm->underruns++;
+                pcm->running = 0;
                 continue;
             }
             LOGE("Arec: error%d\n", errno);

@@ -407,14 +407,16 @@ static int snd_use_case_apply_voice_acdb(snd_use_case_mgr_t *uc_mgr, int use_cas
     char *ident_value;
 
     /* Check if voice call use case/modifier exists */
-    if (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_VOICECALL, MAX_STR_LEN)) {
+    if ((!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_VOICECALL, MAX_STR_LEN)) ||
+       (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_IP_VOICECALL, MAX_STR_LEN))) {
         voice_acdb = 1;
     }
     if (voice_acdb != 1) {
         list_size = snd_ucm_get_size_of_list(uc_mgr->card_ctxt_ptr->mod_list_head);
         for (index = 0; index < list_size; index++) {
             ident_value = snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->mod_list_head, index);
-            if (!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOICE, MAX_STR_LEN)) {
+            if ((!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOICE, MAX_STR_LEN)) ||
+                (!strncmp(ident_value, SND_USE_CASE_MOD_PLAY_VOIP, MAX_STR_LEN))) {
                 voice_acdb = 1;
                 break;
             }
