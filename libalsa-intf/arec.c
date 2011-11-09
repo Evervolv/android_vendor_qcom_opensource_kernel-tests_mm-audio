@@ -44,6 +44,7 @@ static pcm_flag = 1;
 static duration = 0;
 static char *filename;
 static char *data;
+static int format = SNDRV_PCM_FORMAT_S16_LE;
 
 static struct option long_options[] =
 {
@@ -54,6 +55,7 @@ static struct option long_options[] =
     {"Rate", 1, 0, 'R'},
     {"channel", 1, 0, 'C'},
     {"duration", 1, 0, 'T'},
+    {"format", 1, 0, 'F'},
     {0, 0, 0, 0}
 };
 
@@ -92,8 +94,7 @@ static int set_params(struct pcm *pcm)
 
      param_set_mask(params, SNDRV_PCM_HW_PARAM_ACCESS,
                     (pcm->flags & PCM_MMAP)? SNDRV_PCM_ACCESS_MMAP_INTERLEAVED : SNDRV_PCM_ACCESS_RW_INTERLEAVED);
-     param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-                    SNDRV_PCM_FORMAT_S16_LE);
+     param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT, pcm->format);
      param_set_mask(params, SNDRV_PCM_HW_PARAM_SUBFORMAT,
                     SNDRV_PCM_SUBFORMAT_STD);
      param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_TIME, 1000);
@@ -177,6 +178,7 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
     pcm->channels = channels;
     pcm->rate = rate;
     pcm->flags = flags;
+    pcm->format = format;
     if (set_params(pcm)) {
         fprintf(stderr, "Arec:params setting failed\n");
         pcm_close(pcm);
@@ -321,10 +323,6 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
                 rec_size += bufsize;
                 hdr.data_sz += bufsize;
                 hdr.riff_sz = hdr.data_sz + 44 - 8;
-                lseek(fd, 0, SEEK_SET);
-                write(fd, &hdr, sizeof(hdr));
-                lseek(fd, 0, SEEK_END);
-                fprintf(stderr, " rec_size =%d count =%d\n", rec_size, count);
                 if (rec_size >= count)
                       break;
 	    }
@@ -337,6 +335,42 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
 fail:
     fprintf(stderr, "Arec:pcm error: %s\n", pcm_error(pcm));
     return -errno;
+}
+
+int rec_raw(const char *fg, const char *device, int rate, int ch,
+                    const char *fn)
+{
+    unsigned flag = 0;
+    uint32_t rec_max_sz = 2147483648LL;
+    uint32_t count;
+    int i = 0;
+
+    if (!fn) {
+        fd = fileno(stdout);
+    } else {
+        fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+        if (fd < 0) {
+            fprintf(stderr, "Arec:arec: cannot open '%s'\n", fn);
+            return -EBADFD;
+        }
+    }
+    if (duration == 0) {
+         count = rec_max_sz;
+    } else {
+         count = rate * ch * 2;
+         count *= (off64_t)duration;
+    }
+    count = count < rec_max_sz ? count : rec_max_sz;
+    if (debug)
+        fprintf(stderr, "arec: %d ch, %d hz, %d bit, format %x\n",
+        ch, rate, 16, format);
+
+    if (!strncmp(fg, "M", sizeof("M"))) {
+        flag = PCM_MMAP;
+    } else if (!strncmp(fg, "N", sizeof("N"))) {
+        flag = PCM_NMMAP;
+    }
+    return record_file(rate, ch, fd, count, flag, device);
 }
 
 int rec_wav(const char *fg, const char *device, int rate, int ch, const char *fn)
@@ -438,7 +472,7 @@ int main(int argc, char **argv)
     int rc = 0;
 
     if (argc < 2) {
-          printf("Usage: arec [options] <file>\n"
+          printf("\nUsage: arec [options] <file>\n"
                 "options:\n"
                 "-D <hw:C,D>	-- Alsa PCM by name\n"
                 "-M		-- Mmap stream\n"
@@ -447,10 +481,15 @@ int main(int argc, char **argv)
                 "-C		-- Channels\n"
                 "-R		-- Rate\n"
                 "-T		-- Time in seconds for recording\n"
+		"-F             -- Format\n"
                 "<file> \n");
+           for (i = 0; i < SNDRV_PCM_FORMAT_LAST; ++i)
+               if (get_format_name(i))
+                   fprintf(stderr, "%s ", get_format_name(i));
+           fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
           return 0;
     }
-    while ((c = getopt_long(argc, argv, "PVMD:R:C:T:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "PVMD:R:C:T:F:", long_options, &option_index)) != -1) {
        switch (c) {
        case 'P':
           pcm_flag = 0;
@@ -473,8 +512,11 @@ int main(int argc, char **argv)
        case 'T':
           duration = (int)strtol(optarg, NULL, 0);
           break;
+       case 'F':
+          format = (int)get_format(optarg);
+          break;
        default:
-          printf("Usage: arec [options] <file>\n"
+          printf("\nUsage: arec [options] <file>\n"
                 "options:\n"
                 "-D <hw:C,D>	-- Alsa PCM by name\n"
                 "-M		-- Mmap stream\n"
@@ -483,7 +525,12 @@ int main(int argc, char **argv)
                 "-C		-- Channels\n"
                 "-R		-- Rate\n"
                 "-T		-- Time in seconds for recording\n"
+		"-F             -- Format\n"
                 "<file> \n");
+           for (i = 0; i < SNDRV_PCM_FORMAT_LAST; ++i)
+               if (get_format_name(i))
+                   fprintf(stderr, "%s ", get_format_name(i));
+           fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
           return -EINVAL;
        }
     }
@@ -504,7 +551,10 @@ int main(int argc, char **argv)
     sigaction(SIGABRT, &sa, NULL);
 
     if (pcm_flag) {
-        rc = rec_wav(mmap, device, rate, ch, filename);
+	 if (format == SNDRV_PCM_FORMAT_S16_LE)
+             rc = rec_wav(mmap, device, rate, ch, filename);
+         else
+             rc = rec_raw(mmap, device, rate, ch, filename);
     } else {
         rc = rec_wav(mmap, device, rate, ch, "dummy");
     }

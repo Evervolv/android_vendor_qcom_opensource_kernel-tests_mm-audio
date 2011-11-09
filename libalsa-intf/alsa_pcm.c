@@ -42,6 +42,117 @@
 
 #define DEBUG 1
 
+enum format_alias {
+      S8 = 0,
+      U8,
+      S16_LE,
+      S16_BE,
+      U16_LE,
+      U16_BE,
+      S24_LE,
+      S24_BE,
+      U24_LE,
+      U24_BE,
+      S32_LE,
+      S32_BE,
+      U32_LE,
+      U32_BE,
+      FLOAT_LE,
+      FLOAT_BE,
+      FLOAT64_LE,
+      FLOAT64_BE,
+      IEC958_SUBFRAME_LE,
+      IEC958_SUBFRAME_BE,
+      MU_LAW,
+      A_LAW,
+      IMA_ADPCM,
+      MPEG,
+      GSM,
+      SPECIAL = 31, 
+      S24_3LE,
+      S24_3BE,
+      U24_3LE,
+      U24_3BE,
+      S20_3LE,
+      S20_3BE,
+      U20_3LE,
+      U20_3BE,
+      S18_3LE,
+      S18_3BE,
+      U18_3LE,
+      U18_3BE,
+      FORMAT_LAST,
+};
+const char *formats_list[][2] = {
+        {"S8", "Signed 8 bit"},
+        {"U8", "Unsigned 8 bit"},
+        {"S16_LE", "Signed 16 bit Little Endian"},
+        {"S16_BE", "Signed 16 bit Big Endian"},
+        {"U16_LE", "Unsigned 16 bit Little Endian"},
+        {"U16_BE", "Unsigned 16 bit Big Endian"},
+        {"S24_LE", "Signed 24 bit Little Endian"},
+        {"S24_BE", "Signed 24 bit Big Endian"},
+        {"U24_LE", "Unsigned 24 bit Little Endian"},
+        {"U24_BE", "Unsigned 24 bit Big Endian"},
+        {"S32_LE", "Signed 32 bit Little Endian"},
+        {"S32_BE", "Signed 32 bit Big Endian"},
+        {"U32_LE", "Unsigned 32 bit Little Endian"},
+        {"U32_BE", "Unsigned 32 bit Big Endian"},
+        {"FLOAT_LE", "Float 32 bit Little Endian"},
+        {"FLOAT_BE", "Float 32 bit Big Endian"},
+        {"FLOAT64_LE", "Float 64 bit Little Endian"},
+        {"FLOAT64_BE", "Float 64 bit Big Endian"},
+        {"IEC958_SUBFRAME_LE", "IEC-958 Little Endian"},
+        {"IEC958_SUBFRAME_BE", "IEC-958 Big Endian"},
+        {"MU_LAW", "Mu-Law"},
+        {"A_LAW", "A-Law"},
+        {"IMA_ADPCM", "Ima-ADPCM"},
+        {"MPEG", "MPEG"},
+        {"GSM", "GSM"}, 
+        [31] = {"SPECIAL", "Special"},
+        {"S24_3LE", "Signed 24 bit Little Endian in 3bytes"},
+        {"S24_3BE", "Signed 24 bit Big Endian in 3bytes"},
+        {"U24_3LE", "Unsigned 24 bit Little Endian in 3bytes"},
+        {"U24_3BE", "Unsigned 24 bit Big Endian in 3bytes"},
+        {"S20_3LE", "Signed 20 bit Little Endian in 3bytes"},
+        {"S20_3BE", "Signed 20 bit Big Endian in 3bytes"},
+        {"U20_3LE", "Unsigned 20 bit Little Endian in 3bytes"},
+        {"U20_3BE", "Unsigned 20 bit Big Endian in 3bytes"},
+        {"S18_3LE", "Signed 18 bit Little Endian in 3bytes"},
+        {"S18_3BE", "Signed 18 bit Big Endian in 3bytes"},
+        {"U18_3LE", "Unsigned 18 bit Little Endian in 3bytes"},
+        {"U18_3BE", "Unsigned 18 bit Big Endian in 3bytes"},
+};
+
+int get_format(const char* name)
+{
+        int format;
+        for (format = 0; format < FORMAT_LAST; format++) {
+                if (formats_list[format][0] &&
+                    strcasecmp(name, formats_list[format][0]) == 0) {
+                        LOGV("format_names %s", name);
+                        return  format;
+                }
+        }
+        return -EINVAL;
+}
+
+const char *get_format_name(int format)
+{
+        if ((format < FORMAT_LAST) &&
+             formats_list[format][0])
+            return formats_list[format][0];
+        return NULL;
+}
+
+const char *get_format_desc(int format)
+{
+        if ((format < FORMAT_LAST) &&
+             formats_list[format][1])
+            return formats_list[format][1];
+        return NULL;
+}
+
 /* alsa parameter manipulation cruft */
 
 #define PARAM_MAX SNDRV_PCM_HW_PARAM_LAST_INTERVAL
