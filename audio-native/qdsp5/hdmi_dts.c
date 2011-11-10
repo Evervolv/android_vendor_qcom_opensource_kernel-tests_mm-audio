@@ -235,6 +235,16 @@ static int hdmi_dts_play(struct audtest_config *config)
                 goto error_ioctl_audio_start;
         }
 
+	for (i = 0; i < 20; i++) {
+                get_60958_61937_pause_burst(hdmi_non_l_rep_per,
+                                config_60958_61937.rep_per_60958, &config_60958_61937);
+
+                if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
+                        fprintf(stderr, "could not write pause frame %d\n", i);
+                        rc = -1;
+                        goto error_dev_write;
+                }
+        }
 
 	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_DTS;
 	memset(&codec_61937_config, sizeof(struct codec_61937_config), 0);
