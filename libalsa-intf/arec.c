@@ -46,6 +46,7 @@ static char *filename;
 static char *data;
 static int format = SNDRV_PCM_FORMAT_S16_LE;
 static int period = 0;
+static int piped = 0;
 
 static struct option long_options[] =
 {
@@ -301,10 +302,14 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
                 }
                 rec_size += bufsize;
                 hdr.data_sz += bufsize;
-                if (rec_size >= count) {
-                    hdr.riff_sz = hdr.data_sz + 44 - 8;
-                      break;
+                hdr.riff_sz = hdr.data_sz + 44 - 8;
+                if (!piped) {
+                    lseek(fd, 0, SEEK_SET);
+                    write(fd, &hdr, sizeof(hdr));
+                    lseek(fd, 0, SEEK_END);
                 }
+                if (rec_size >= count)
+                      break;
            }
     } else {
 	    bufsize = pcm->period_size;
@@ -323,15 +328,21 @@ int record_file(unsigned rate, unsigned channels, int fd, unsigned count,  unsig
 	    while (!pcm_read(pcm, data, bufsize)) {
 		if (write(fd, data, bufsize) != bufsize) {
 		    fprintf(stderr, "Arec:could not write %d bytes\n", bufsize);
-		    return -errno;
+		    break;
 		}
                 rec_size += bufsize;
                 hdr.data_sz += bufsize;
                 hdr.riff_sz = hdr.data_sz + 44 - 8;
+                if (!piped) {
+                    lseek(fd, 0, SEEK_SET);
+                    write(fd, &hdr, sizeof(hdr));
+                    lseek(fd, 0, SEEK_END);
+                }
                 if (rec_size >= count)
-                      break;
+                    break;
 	    }
     }
+    fprintf(stderr, " rec_size =%d count =%d\n", rec_size, count);
     close(fd);
     free(data);
     pcm_close(pcm);
@@ -352,6 +363,7 @@ int rec_raw(const char *fg, const char *device, int rate, int ch,
 
     if (!fn) {
         fd = fileno(stdout);
+        piped = 1;
     } else {
         fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0664);
         if (fd < 0) {
@@ -388,6 +400,7 @@ int rec_wav(const char *fg, const char *device, int rate, int ch, const char *fn
     if (pcm_flag) {
             if (!fn) {
               fd = fileno(stdout);
+              piped = 1;
             } else {
 	       fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC, 0664);
 	       if (fd < 0) {
