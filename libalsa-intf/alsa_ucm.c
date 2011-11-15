@@ -537,11 +537,12 @@ int snd_use_case_apply_mixer_controls(snd_use_case_mgr_t *uc_mgr,
                 uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[use_case_index].capability) {
                 /*TODO: Check for voice call use case or modifier and set voice calibration*/
                 if (enable) {
-                    if (snd_use_case_apply_voice_acdb(uc_mgr, use_case_index))
+                    if (snd_use_case_apply_voice_acdb(uc_mgr, use_case_index)) {
                         LOGD("acdb_id %d cap %d enable %d", uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[use_case_index].acdb_id,
                             uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[use_case_index].capability, enable);
                         acdb_loader_send_audio_cal(uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[use_case_index].acdb_id,
                             uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[use_case_index].capability);
+                    }
                 }
             }
             if (enable) {
