@@ -351,7 +351,9 @@ start_done:
         while (read(fd, data, bufsize) == bufsize) {
             if (pcm_write(pcm, data, bufsize)){
                 fprintf(stderr, "Aplay: pcm_write failed\n");
-                break;
+                free(data);
+                pcm_close(pcm);
+                return -errno;
             }
         }
         free(data);
