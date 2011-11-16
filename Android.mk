@@ -1,3 +1,3 @@
-ifneq ($(call is-android-codename,ICECREAM_SANDWICH),true)
+ifeq ($(strip $(TARGET_BOARD_PLATFORM)),msm8960)
 include $(call all-subdir-makefiles)
 endif
