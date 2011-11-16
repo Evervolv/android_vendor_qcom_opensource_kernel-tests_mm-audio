@@ -30,7 +30,7 @@ ifeq ($(call is-board-platform,msm8660),true)
 mm-audio-native-def += -DQDSP6V2
 endif
 
-ifeq "$(findstring msm7627a,$(QCOM_TARGET_PRODUCT))" "msm7627a"
+ifeq ($(call is-board-platform,msm7627a),true)
 mm-audio-native-def += -DAUDIO7X27A
 endif
 
@@ -96,7 +96,7 @@ LOCAL_SRC_FILES += hdmi_dts.c
 endif
 endif
 else
-ifeq "$(findstring msm7627a,$(QCOM_TARGET_PRODUCT))" "msm7627a"
+ifeq ($(call is-board-platform,msm7627a),true)
 LOCAL_SRC_FILES += voiceenctest.c
 endif
 endif
