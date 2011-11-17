@@ -75,6 +75,78 @@ LOCAL_SRC_FILES    := snd_soc_msm/snd_soc_msm
 include $(BUILD_PREBUILT)
 
 include $(CLEAR_VARS)
+LOCAL_MODULE       := HiFi_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/HiFi_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := FM_Digital_Radio_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/FM_Digital_Radio_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := HiFi_Rec_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/HiFi_Rec_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := Voice_Call_IP_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/Voice_Call_IP_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := Voice_Call_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/Voice_Call_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := FM_REC_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/FM_REC_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := HiFi_Low_Power_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/HiFi_Low_Power_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := FM_A2DP_REC_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/FM_A2DP_REC_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE       := snd_soc_msm_2x
+LOCAL_MODULE_TAGS  := optional
+LOCAL_MODULE_CLASS := ETC
+LOCAL_MODULE_PATH  := $(TARGET_OUT_ETC)/snd_soc_msm
+LOCAL_SRC_FILES    := snd_soc_msm/snd_soc_msm_2x
+include $(BUILD_PREBUILT)
+
+include $(CLEAR_VARS)
 #LOCAL_SRC_FILES:= aplay.c alsa_pcm.c alsa_mixer.c
 LOCAL_SRC_FILES:= aplay.c
 LOCAL_MODULE:= aplay

@@ -142,6 +142,7 @@ struct snd_use_case_mgr {
 /* Valid sound cards list */
 static const char *card_list[] = {
     "snd_soc_msm",
+    "snd_soc_msm_2x",
 };
 
 typedef struct card_mapping {
@@ -152,6 +153,7 @@ typedef struct card_mapping {
 /* sound card name and number mapping */
 static card_mapping_t card_mapping_list[] = {
     {"snd_soc_msm", 0},
+    {"snd_soc_msm_2x", 0},
 };
 
 /* New use cases, devices and modifiers added
