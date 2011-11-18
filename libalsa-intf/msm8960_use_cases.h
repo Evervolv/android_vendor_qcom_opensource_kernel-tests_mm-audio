@@ -65,6 +65,7 @@ extern "C" {
 /* mixer control type */
 #define TYPE_INT            0
 #define TYPE_STR            1
+#define TYPE_MULTI_VAL      2
 
 /* Maximum string length of use case and device combination */
 #define MAX_UC_LEN 100
@@ -77,6 +78,7 @@ typedef struct mixer_control {
     unsigned type;
     unsigned value;
     char *string;
+    char **mulval;
 }mixer_control_t;
 
 /* Use case mixer controls structure */

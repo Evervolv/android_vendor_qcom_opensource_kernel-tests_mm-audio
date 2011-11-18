@@ -563,6 +563,11 @@ int snd_use_case_apply_mixer_controls(snd_use_case_mgr_t *uc_mgr,
                         LOGD("Setting mixer control: %s, value: %d",
                              mixer_list[index].control_name, mixer_list[index].value);
                         ret = mixer_ctl_set(ctl, mixer_list[index].value);
+                    } else if (mixer_list[index].type == TYPE_MULTI_VAL) {
+                        LOGD("Setting multi value: %s", mixer_list[index].control_name);
+                        ret = mixer_ctl_set_value(ctl, mixer_list[index].value, mixer_list[index].mulval);
+                        if (ret < 0)
+                            LOGE("Failed to set multi value control %s\n", mixer_list[index].control_name);
                     } else {
                         LOGD("Setting mixer control: %s, value: %s",
                             mixer_list[index].control_name, mixer_list[index].string);
@@ -1741,13 +1746,36 @@ static int snd_ucm_extract_dev_name(char *buf, char **dev_name)
     return 0;
 }
 
+static int get_num_values(const char *buf)
+{
+    char *buf_addr, *p;
+    int count = 0;
+
+    buf_addr = (char *)malloc((strlen(buf)+1)*sizeof(char));
+    if (buf_addr == NULL) {
+        LOGE("Failed to allocate memory");
+        return -ENOMEM;
+    }
+    strlcpy(buf_addr, buf, ((strlen(buf)+1)*sizeof(char)));
+    p = strtok(buf_addr, " ");
+    while (p != NULL) {
+        count++;
+        p = strtok(NULL, " ");
+        if (p == NULL)
+            break;
+    }
+    free(buf_addr);
+    return count;
+}
+
 /* Extract a mixer control from config file
  * Returns 0 on sucess, negative error code otherwise
  */
 static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int size)
 {
-    int ret = -EINVAL, i;
-    char *p, *ps;
+    uint32_t temp;
+    int ret = -EINVAL, i, index = 0, count = 0;
+    char *p, *ps, *pmv, temp_coeff[20];
     mixer_control_t *list;
     static const char *const seps = "\r\n";
 
@@ -1771,6 +1799,8 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
             list->type = TYPE_STR;
         } else if(!strncmp(p, "1", 1)) {
             list->type = TYPE_INT;
+        } else if(!strncmp(p, "2", 1)) {
+            list->type = TYPE_MULTI_VAL;
         } else {
             LOGE("Unknown type: p %s\n", p);
         }
@@ -1780,9 +1810,11 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
         if(list->type == TYPE_INT) {
             list->value = atoi(p);
             list->string = NULL;
+            list->mulval = NULL;
         } else if(list->type == TYPE_STR) {
             list->value = -1;
             list->string = (char *)malloc((strlen(p)+1)*sizeof(char));
+            list->mulval = NULL;
             if(list->string == NULL) {
                 ret = -ENOMEM;
                 free((*mixer_list));
@@ -1790,6 +1822,38 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
                 break;
             }
             strlcpy(list->string, p, (strlen(p)+1)*sizeof(char));
+        } else if(list->type == TYPE_MULTI_VAL) {
+            if (p != NULL) {
+                count = get_num_values(p);
+                list->mulval = (char **)malloc(count*sizeof(char *));
+                index = 0;
+                /* To support volume values in percentage */
+                if ((count == 1) && (strstr(p, "%") != NULL)) {
+                    pmv = strtok(p, " ");
+                    while (pmv != NULL) {
+                        list->mulval[index] = (char *)malloc((strlen(pmv)+1)*sizeof(char));
+                        strlcpy(list->mulval[index], pmv, (strlen(pmv)+1));
+                        index++;
+                        pmv = strtok(NULL, " ");
+                        if (pmv == NULL)
+                            break;
+                    }
+                } else {
+                    pmv = strtok(p, " ");
+                    while (pmv != NULL) {
+                        temp = (uint32_t)strtoul(pmv, &ps, 16);
+                        sprintf(temp_coeff, "%lu", temp);
+                        list->mulval[index] = (char *)malloc((strlen(temp_coeff)+1)*sizeof(char));
+                        strlcpy(list->mulval[index], temp_coeff, (strlen(temp_coeff)+1));
+                        index++;
+                        pmv = strtok(NULL, " ");
+                        if (pmv == NULL)
+                            break;
+                    }
+                }
+                list->value = count;
+                list->string = NULL;
+            }
         } else {
             LOGE("Unknown type: p %s\n", p);
             list->value = -1;
@@ -1803,7 +1867,7 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
 
 void snd_ucm_free_mixer_list(snd_use_case_mgr_t **uc_mgr)
 {
-    int case_index = 0, index = 0, verb_index = 0;
+    int case_index = 0, index = 0, verb_index = 0, mul_index = 0;
 
     while(strncmp((*uc_mgr)->card_ctxt_ptr->verb_list[verb_index], SND_UCM_END_OF_LIST, 3)) {
         for(case_index = 0; case_index < (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].use_case_count; case_index++) {
@@ -1813,6 +1877,15 @@ void snd_ucm_free_mixer_list(snd_use_case_mgr_t **uc_mgr)
                 }
                 if((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].string) {
                     free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].string);
+                }
+                if((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].mulval) {
+                    for(mul_index = 0;
+                        mul_index < (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].value;
+                        mul_index++) {
+                        free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].mulval[mul_index]);
+                    }
+                    if((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].mulval)
+                        free((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].ena_mixer_list[index].mulval);
                 }
             }
             for(index = 0; index < (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[verb_index].card_ctrl[case_index].dis_mixer_count; index++) {
