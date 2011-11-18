@@ -63,7 +63,6 @@ static int hdmi_dts_play(struct audtest_config *config)
 	int max_dts_frame_sz, cur_dts_frame_sz;
 	char *device_name = "hdmi_pass_through";
 	int rc = 0;
-	unsigned int dts_type = 0;
 	unsigned int repetition_period = 0;
 	unsigned int dma_buf_sz = 0;
 	unsigned int tmp = 0;
@@ -71,6 +70,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	unsigned int actual_write_size = 0;
 	unsigned char silent_frame[11];
 	unsigned int silent_frame_count = 0;
+	struct msm_audio_config aud_config;
 
 
 	fprintf(stderr, "%s():\n", __func__);
@@ -128,7 +128,6 @@ static int hdmi_dts_play(struct audtest_config *config)
 		fclose(fp);
 		return -1;
 	}
-	dts_type = get_dts_type();
 
 	init_60958_61937_framer();
 
@@ -157,7 +156,15 @@ static int hdmi_dts_play(struct audtest_config *config)
 		goto error_open_dev;
 	}
 
-	config_60958_61937.codec_type = dts_type;
+	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_DTS;
+	rc = get_first_frame_info(&audio_codec_info);
+	if (rc < 0 ) {
+		fprintf(stderr, "Failed to get first frame indfo\n");
+		return -1;
+	}
+
+	config_60958_61937.codec_type = audio_codec_info.codec_config.dts_fr_info.dts_type;
+	fprintf(stderr, "dts type %d\n",  config_60958_61937.codec_type);
 
 	rc = get_60958_61937_config(&config_60958_61937);
 
@@ -195,8 +202,12 @@ static int hdmi_dts_play(struct audtest_config *config)
 			config_60958_61937.sz_61937_burst,
 			config_60958_61937.rep_per_60958);
 
+	aud_config.buffer_size = dma_buf_sz;
+	aud_config.sample_rate = audio_codec_info.codec_config.dts_fr_info.sample_rate;
+	fprintf(stderr, "Sample_rate = %d dma buf size = %d",
+			aud_config.sample_rate, dma_buf_sz);
 
-	if (ioctl(afd, AUDIO_SET_CONFIG, &dma_buf_sz)) {
+	if (ioctl(afd, AUDIO_SET_CONFIG, &aud_config)) {
 		fprintf(stderr, "could not set AUDIO_SET_IEC_CODEC_CONFIG\n");
 		rc = -1;
 		goto error_ioctl_audio_get_config;
@@ -287,7 +298,8 @@ static int hdmi_dts_play(struct audtest_config *config)
 	 * synchronize and avoid data loss during synchronization
 	 */
 	get_silent_frame (silent_frame);
-	codec_61937_config.codec_type = dts_type;
+	codec_61937_config.codec_type =
+		audio_codec_info.codec_config.dts_fr_info.dts_type;
 
 	codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit = 11;
 
@@ -310,7 +322,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 			dts_61937_burst,
 			config_60958_61937.sz_61937_burst,
 			&codec_61937_config);
-	switch(dts_type) {
+	switch(audio_codec_info.codec_config.dts_fr_info.dts_type) {
 		case DTS_TYPE_1:
 			silent_frame_count = 100;
 			break;
