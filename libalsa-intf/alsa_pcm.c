@@ -712,6 +712,8 @@ int pcm_close(struct pcm *pcm)
         free(pcm->sw_p);
     if (pcm->hw_p)
         free(pcm->hw_p);
+    if (pcm->sync_ptr)
+        free(pcm->sync_ptr);
     free(pcm);
     return 0;
 }
@@ -775,6 +777,8 @@ struct pcm *pcm_open(unsigned flags, char *device)
 
     pcm->fd = open(dname, O_RDWR);
     if (pcm->fd < 0) {
+        free(pcm->sync_ptr);
+        free(pcm);
         LOGE("cannot open device '%s'", dname);
         return &bad_pcm;
     }
