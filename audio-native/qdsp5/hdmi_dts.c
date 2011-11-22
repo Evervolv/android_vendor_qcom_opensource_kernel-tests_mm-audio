@@ -213,8 +213,8 @@ static int hdmi_dts_play(struct audtest_config *config)
 	sz = dma_buf_sz;
 
 	 /******************** write_file ***************************************/
-	
-	for (i = 0; i < audio_config.buffer_count; i++) {
+	/* Driver requires two buffers to be prefilled before AUDIO_START */
+	for (i = 0; i < 2; i++) {
 		get_60958_61937_pause_burst(hdmi_non_l_rep_per,
 				config_60958_61937.rep_per_60958, &config_60958_61937);
 
