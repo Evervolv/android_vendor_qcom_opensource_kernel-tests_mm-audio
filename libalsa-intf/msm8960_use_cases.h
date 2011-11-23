@@ -184,7 +184,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_MOD_CAPTURE_FM      "Capture FM"
 #define SND_USE_CASE_MOD_CAPTURE_A2DP_FM "Capture A2DP FM"
 #define SND_USE_CASE_MOD_PLAY_LPA        "Play LPA"
-#define SND_USE_CASE_MOD_PLAY_VOIP       "Voice Call IP"
+#define SND_USE_CASE_MOD_PLAY_VOIP       "Play VOIP"
 #define SND_USE_CASE_MOD_CAPTURE_VOIP    "Capture VOIP"
 
 /* List utility functions for maintaining enabled devices and modifiers */
