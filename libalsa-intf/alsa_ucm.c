@@ -972,20 +972,19 @@ int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr, const char *card_name)
     if (ret < 0) {
         LOGE("Card %s not found", card_name);
     } else {
-        uc_mgr_ptr = (snd_use_case_mgr_t *)malloc(sizeof(snd_use_case_mgr_t));
+        uc_mgr_ptr = (snd_use_case_mgr_t *)calloc(1, sizeof(snd_use_case_mgr_t));
         if (uc_mgr_ptr == NULL) {
             LOGE("Failed to allocate memory for instance");
             return -ENOMEM;
         }
         uc_mgr_ptr->snd_card_index = index;
-        uc_mgr_ptr->card_ctxt_ptr = (card_ctxt_t *)malloc(sizeof(card_ctxt_t));
+        uc_mgr_ptr->card_ctxt_ptr = (card_ctxt_t *)calloc(1, sizeof(card_ctxt_t));
         if (uc_mgr_ptr->card_ctxt_ptr == NULL) {
             LOGE("Failed to allocate memory for card context");
             free(uc_mgr_ptr);
             uc_mgr_ptr = NULL;
             return -ENOMEM;
         }
-        memset(uc_mgr_ptr->card_ctxt_ptr, 0, sizeof(uc_mgr_ptr->card_ctxt_ptr));
         uc_mgr_ptr->card_ctxt_ptr->card_number = card_mapping_list[index].card_number;
         uc_mgr_ptr->card_ctxt_ptr->card_name = (char *)malloc((strlen(card_name)+1)*sizeof(char));
         if (uc_mgr_ptr->card_ctxt_ptr->card_name == NULL) {
