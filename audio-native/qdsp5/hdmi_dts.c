@@ -69,6 +69,8 @@ static int hdmi_dts_play(struct audtest_config *config)
 	unsigned int tmp = 0;
 	unsigned int frame_count = 0;
 	unsigned int actual_write_size = 0;
+	unsigned char silent_frame[11];
+	unsigned int silent_frame_count = 0;
 
 
 	fprintf(stderr, "%s():\n", __func__);
@@ -226,18 +228,103 @@ static int hdmi_dts_play(struct audtest_config *config)
 	}
 
 	fprintf(stderr, "start playback\n");
-
+	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_DTS;
+	memset(&codec_61937_config, sizeof(struct codec_61937_config), 0);
         rc = ioctl(afd, AUDIO_START, 0);
+	if (rc < 0 ) {
+		fprintf(stderr, "%s: Unable to start driver\n", __func__);
+		rc = 1;
+		goto error_ioctl_audio_start;
+	}
+	/* Sending 192 block of 60958 frames to AVR before sending the actual
+	 * data so that AVR is synchronized to DTS bitstream configuration
+	 */
+	rc = get_audio_frame(dts_frame, max_dts_frame_sz,
+				&audio_codec_info);
 
-        if (rc < 0 ) {
-                fprintf(stderr, "%s: Unable to start driver\n", __func__);
-                rc = 1;
-                goto error_ioctl_audio_start;
-        }
+	if (rc < 0 ) {
+		fprintf(stderr, "%s: no more aduio frames\n",
+			__func__);
+		rc = 0;
+		break;
+	}
 
-	for (i = 0; i < 20; i++) {
-                get_60958_61937_pause_burst(hdmi_non_l_rep_per,
-                                config_60958_61937.rep_per_60958, &config_60958_61937);
+	codec_61937_config.codec_type =
+		audio_codec_info.codec_config.dts_fr_info.dts_type;
+
+	codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit =
+		audio_codec_info.codec_config.dts_fr_info.dts_fr_sz_8bit;
+
+	codec_61937_config.codec_config.dts_fr_config.sample_rate =
+		audio_codec_info.codec_config.dts_fr_info.sample_rate;
+
+	codec_61937_config.codec_config.dts_fr_config.dts_type =
+		audio_codec_info.codec_config.dts_fr_info.dts_type;
+
+	codec_61937_config.codec_config.dts_fr_config.reverse_bytes =
+		audio_codec_info.codec_config.dts_fr_info.reverse_bytes;
+
+	cur_dts_frame_sz =
+		codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit;
+
+	get_61937_burst(dts_61937_burst,
+			config_60958_61937.sz_61937_burst,
+			dts_frame, cur_dts_frame_sz,
+			&codec_61937_config);
+
+	get_60958_frame(hdmi_non_l_rep_per,
+			config_60958_61937.rep_per_60958,
+			dts_61937_burst,
+			config_60958_61937.sz_61937_burst,
+			&codec_61937_config);
+	/* Writing 192 block i.e. 192 * 8 bytes */
+	if (write(afd, hdmi_non_l_rep_per,1536 ) != 1536) {
+		fprintf(stderr, "could not write pause frame %d\n", i);
+		rc = -1;
+		goto error_dev_write;
+	}
+	/* Sending silent frames for initial duration allowing AVR to
+	 * synchronize and avoid data loss during synchronization
+	 */
+	get_silent_frame (silent_frame);
+	codec_61937_config.codec_type = dts_type;
+
+	codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit = 11;
+
+	codec_61937_config.codec_config.dts_fr_config.sample_rate =
+		audio_codec_info.codec_config.dts_fr_info.sample_rate;
+
+	codec_61937_config.codec_config.dts_fr_config.dts_type =
+		audio_codec_info.codec_config.dts_fr_info.dts_type;
+
+	codec_61937_config.codec_config.dts_fr_config.reverse_bytes =
+		audio_codec_info.codec_config.dts_fr_info.reverse_bytes;
+
+	cur_dts_frame_sz = 11;
+	get_61937_burst(dts_61937_burst,
+			config_60958_61937.sz_61937_burst,
+			silent_frame, cur_dts_frame_sz,
+			&codec_61937_config);
+	get_60958_frame(hdmi_non_l_rep_per,
+			config_60958_61937.rep_per_60958,
+			dts_61937_burst,
+			config_60958_61937.sz_61937_burst,
+			&codec_61937_config);
+	switch(dts_type) {
+		case DTS_TYPE_1:
+			silent_frame_count = 100;
+			break;
+		case DTS_TYPE_2:
+			silent_frame_count = 50;
+			break;
+		case DTS_TYPE_3:
+			silent_frame_count = 25;
+			break;
+		default:
+			silent_frame_count = 0;
+	}
+
+	for (i = 0; i < silent_frame_count; i++) {
 
                 if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
                         fprintf(stderr, "could not write pause frame %d\n", i);
@@ -245,7 +332,9 @@ static int hdmi_dts_play(struct audtest_config *config)
                         goto error_dev_write;
                 }
         }
-
+	/* Sending actual data to AVR */
+	max_dts_frame_sz = init_audio_parser(dts_file_data, dts_file_sz,
+			AUDIO_PARSER_CODEC_DTS);
 	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_DTS;
 	memset(&codec_61937_config, sizeof(struct codec_61937_config), 0);
 	for (;;) {
@@ -260,7 +349,8 @@ static int hdmi_dts_play(struct audtest_config *config)
 				break;
 			}
 
-			codec_61937_config.codec_type = dts_type;
+			codec_61937_config.codec_type =
+				audio_codec_info.codec_config.dts_fr_info.dts_type;
 
 			codec_61937_config.codec_config.dts_fr_config.dts_fr_sz_8bit =
 				audio_codec_info.codec_config.dts_fr_info.dts_fr_sz_8bit;
