@@ -206,7 +206,8 @@ static int hdmi_ac3_play(struct audtest_config *config)
 
 	sz = config_60958_61937.rep_per_60958;
 
-	for (i = 0; i < audio_config.buffer_count; i++) {
+	/* Driver requires two buffers to be prefilled before AUDIO_START */
+	for (i = 0; i < 2; i++) {
 
 		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
 			fprintf(stderr, "could not write pause frame %d\n", i);
