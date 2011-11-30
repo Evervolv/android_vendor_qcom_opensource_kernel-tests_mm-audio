@@ -64,6 +64,7 @@ static int hdmi_ac3_play(struct audtest_config *config)
 	int rc = 0;
 	int exit_on_fail = 0;
 	unsigned int dma_buf_sz = 0;
+	struct msm_audio_config aud_config;
 
 
 	fprintf(stderr, "%s():\n", __func__);
@@ -182,7 +183,20 @@ static int hdmi_ac3_play(struct audtest_config *config)
 			config_60958_61937.sz_61937_burst,
 			config_60958_61937.rep_per_60958);
 
-	if (ioctl(afd, AUDIO_SET_CONFIG, &dma_buf_sz)) {
+
+	audio_codec_info.codec_type = AUDIO_PARSER_CODEC_AC3;
+	rc = get_first_frame_info(&audio_codec_info);
+
+	if (rc < 0 ) {
+		fprintf(stderr, "Failed to get first frame indfo\n");
+		return -1;
+	}
+	aud_config.buffer_size = dma_buf_sz;
+	aud_config.sample_rate = audio_codec_info.codec_config.ac3_fr_info.sample_rate;
+	fprintf(stderr, "Sample_rate = %d dma buf size = %d",
+			aud_config.sample_rate, dma_buf_sz);
+
+	if (ioctl(afd, AUDIO_SET_CONFIG, &aud_config)) {
 		fprintf(stderr, "could not set AUDIO_SET_IEC_CODEC_CONFIG\n");
 		rc = -1;
 		exit_on_fail = 1;
