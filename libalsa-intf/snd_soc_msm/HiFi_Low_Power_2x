@@ -250,7 +250,7 @@ SectionDevice
 	EnableSequence
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
-		'RX4 MIX1 INP1':0:RX2
+		'RX5 MIX1 INP1':0:RX2
 		'RX4 DSM MUX':0:DSM_INV
 		'RX6 DSM MUX':0:DSM_INV
                 'LINEOUT1 Volume':1:66
@@ -261,7 +261,7 @@ SectionDevice
 
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
-		'RX4 MIX1 INP1':0:ZERO
+		'RX5 MIX1 INP1':0:ZERO
 		'RX4 DSM MUX':0:CIC_OUT
 		'RX6 DSM MUX':0:CIC_OUT
                 'LINEOUT1 Volume':1:0
@@ -308,7 +308,7 @@ SectionDevice
 	EnableSequence
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
-		'RX4 MIX1 INP1':0:RX2
+		'RX5 MIX1 INP1':0:RX2
 		'RX4 DSM MUX':0:DSM_INV
 		'RX6 DSM MUX':0:DSM_INV
                 'LINEOUT1 Volume':1:66
@@ -325,7 +325,7 @@ SectionDevice
 
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
-		'RX4 MIX1 INP1':0:ZERO
+		'RX5 MIX1 INP1':0:ZERO
 		'RX4 DSM MUX':0:CIC_OUT
 		'RX6 DSM MUX':0:CIC_OUT
                 'LINEOUT1 Volume':1:0
@@ -351,7 +351,7 @@ SectionDevice
 	EnableSequence
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
-		'RX4 MIX1 INP1':0:RX2
+		'RX5 MIX1 INP1':0:RX2
 		'RX4 DSM MUX':0:DSM_INV
 		'RX6 DSM MUX':0:DSM_INV
                 'LINEOUT1 Volume':1:66
@@ -376,7 +376,7 @@ SectionDevice
 
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
-		'RX4 MIX1 INP1':0:ZERO
+		'RX5 MIX1 INP1':0:ZERO
 		'RX4 DSM MUX':0:CIC_OUT
 		'RX6 DSM MUX':0:CIC_OUT
                 'LINEOUT1 Volume':1:0
@@ -453,7 +453,7 @@ SectionDevice
 	EnableSequence
 		'SLIM_0_RX Channels':0:Two
 		'RX3 MIX1 INP1':0:RX1
-		'RX4 MIX1 INP1':0:RX2
+		'RX5 MIX1 INP1':0:RX2
 		'RX4 DSM MUX':0:DSM_INV
 		'RX6 DSM MUX':0:DSM_INV
                 'LINEOUT1 Volume':1:66
@@ -464,7 +464,7 @@ SectionDevice
 
 	DisableSequence
 		'RX3 MIX1 INP1':0:ZERO
-		'RX4 MIX1 INP1':0:ZERO
+		'RX5 MIX1 INP1':0:ZERO
 		'RX4 DSM MUX':0:CIC_OUT
 		'RX6 DSM MUX':0:CIC_OUT
                 'LINEOUT1 Volume':1:0
