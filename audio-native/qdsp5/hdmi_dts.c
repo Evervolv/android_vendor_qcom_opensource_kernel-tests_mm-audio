@@ -35,6 +35,7 @@
 const char  *dev_file_name;
 static int quit, repeat;
 static int pause_flag = 0;
+static int play_state = 0;
 
 static struct config_60958_61937 config_60958_61937;
 static struct codec_61937_config codec_61937_config;
@@ -46,6 +47,7 @@ static unsigned char *dts_frame;
 
 
 #define DEV_FILE_NAME   "/dev/msm_lpa_if_out"
+#define MAX_FILE_SIZE 128
 
 static int hdmi_dts_play(struct audtest_config *config)
 {
@@ -71,7 +73,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	unsigned char silent_frame[11];
 	unsigned int silent_frame_count = 0;
 	struct msm_audio_config aud_config;
-
+	play_state = 1;
 
 	fprintf(stderr, "%s():\n", __func__);
 
@@ -435,6 +437,7 @@ error_alsa_mixer_open:
 		sleep(5);
 	}
 	fprintf(stderr, "End of playback\n");
+	play_state = 0;
 	return rc;
 }
 
@@ -445,6 +448,7 @@ static void* hdmi_dts_thread(void* arg) {
 	int ret_val;
 
 	ret_val = hdmi_dts_play(&context->config);
+	free(context->config.file_name);
 	free_context(context);
 	pthread_exit((void*) ret_val);
 
@@ -459,10 +463,13 @@ int hdmi_dts_read_params(void) {
 	if ((context = get_free_context()) == NULL) {
 		ret_val = -1;
 	} else {
-		context->config.file_name = "/data/data.dts";
-		dev_file_name = "/dev/msm_lpa_if_out";
-		repeat = 1;
-		quit = 0;
+		if (!play_state) {
+			context->config.file_name = "/data/data.dts";
+			dev_file_name = "/dev/msm_lpa_if_out";
+			repeat = 1;
+			quit = 0;
+			pause_flag = 0;
+		}
 
 		token = strtok(NULL, " ");
 
@@ -481,7 +488,10 @@ int hdmi_dts_read_params(void) {
 					(sizeof("-repeat=") - 1))) {
 				repeat = atoi(&token[sizeof("-repeat=") - 1]);
 			} else {
-				context->config.file_name = token;
+				context->config.file_name = (char*)malloc(MAX_FILE_SIZE);
+				if(!context->config.file_name)
+					return -1;
+				strlcpy(context->config.file_name, token, MAX_FILE_SIZE);
 			}
 			token = strtok(NULL, " ");
 		}
