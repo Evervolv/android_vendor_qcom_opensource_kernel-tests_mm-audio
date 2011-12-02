@@ -28,6 +28,7 @@
 #include <sys/ioctl.h>
 #include <linux/msm_audio_qcp.h>
 #include <linux/msm_audio_amrnb.h>
+#include <linux/msm_audio_amrwb.h>
 #include <pthread.h>
 #include <errno.h>
 #include "audiotest_def.h"
@@ -35,6 +36,7 @@
 #define QCELP_DEVICE_NODE "/dev/msm_qcelp_in"
 #define EVRC_DEVICE_NODE "/dev/msm_evrc_in"
 #define AMRNB_DEVICE_NODE "/dev/msm_amrnb_in"
+#define AMRWB_DEVICE_NODE "/dev/msm_amrwb_in"
 
 struct qcp_header {
 	/* RIFF Section */
@@ -117,6 +119,7 @@ static struct msm_audio_evrc_enc_config evrccfg;
 static struct msm_audio_qcelp_enc_config qcelpcfg;
 static struct msm_audio_amrnb_enc_config_v2 amrnbcfg_v2;
 static struct msm_audio_amrnb_enc_config amrnbcfg;
+static struct msm_audio_amrwb_enc_config amrwbcfg;
 
 #ifdef _ANDROID_
 static const char *cmdfile = "/data/audio_test";
@@ -782,7 +785,6 @@ static int voiceenc_start(struct audtest_config *clnt_config)
 		printf("QCP format\n");
 	} else
 		printf("DSP format\n");
-
 	rec_stop = 0;
 	while(!rec_stop) {
 		memset(buf,0,sz);
@@ -933,13 +935,16 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 			afd = open(EVRC_DEVICE_NODE, open_flags);
 	} else if (rec_type == 3) {
 			afd = open(AMRNB_DEVICE_NODE, open_flags);
+	} else if (rec_type == 4) {
+			afd = open(AMRWB_DEVICE_NODE, open_flags);
 	} else
 		goto device_err;
 
 	if (afd < 0) {
 		printf("Unable to open audio device = %s in mode %d\n",
 			(rec_type == 1? QCELP_DEVICE_NODE:(rec_type == 2? \
-				EVRC_DEVICE_NODE: AMRNB_DEVICE_NODE)), clnt_config->mode);
+				EVRC_DEVICE_NODE:(rec_type == 3) ? \
+				AMRNB_DEVICE_NODE:AMRWB_DEVICE_NODE)), clnt_config->mode);
 		goto device_err;
 	}
 
@@ -1035,6 +1040,23 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
 		}
 		printf("dtx mode = 0x%8x\n", amrnbcfg_v2.dtx_enable);
 		printf("rate = 0x%8x\n", amrnbcfg_v2.band_mode);
+	} else if (rec_type == 4) {
+
+		/* AMRWB specific settings */
+		if (ioctl(afd, AUDIO_GET_AMRWB_ENC_CONFIG, &amrwbcfg)) {
+			perror("Error: AUDIO_GET_AMRWB_ENC_CONFIG failed");
+			goto fail;
+		}
+		printf("dtx mode = 0x%8x\n", amrwbcfg.dtx_enable);
+		printf("rate = 0x%8x\n", amrwbcfg.band_mode);
+		amrwbcfg.dtx_enable = dtx_mode; /* 0 - DTX off, 1 - DTX on */
+		amrwbcfg.band_mode = max_rate;
+		if (ioctl(afd, AUDIO_SET_AMRWB_ENC_CONFIG, &amrwbcfg)) {
+			perror("Error: AUDIO_GET_AMRWB_ENC_CONFIG failed");
+			goto fail;
+		}
+		printf("dtx mode = 0x%8x\n", amrwbcfg.dtx_enable);
+		printf("rate = 0x%8x\n", amrwbcfg.band_mode);
 	}
 
 	/* Record form voice link */
@@ -1052,19 +1074,23 @@ static int voiceenc_start_8660(struct audtest_config *clnt_config)
         if (clnt_config->mode) {
                	/* non - tunnel portion for 8660 */
                	pthread_create(&thread, NULL, voiceenc_nt, (void *)clnt_config);
+		/* Sleep to ensure audio start been called, before
+		 * Driver read done */
+		sleep(1);
 	} else {
 		ioctl(afd, AUDIO_START, 0);
 	}
 
 	printf("Voice encoder started 8660\n");
 
-	if((frame_format == 1) || ((frame_format == 2) && (rec_type != 3))) { /* QCP file */
+	if((frame_format == 1) || ((frame_format == 2) && (rec_type < 3))) { /* QCP file */
 	        lseek(fd, QCP_HEADER_SIZE, SEEK_SET);
 		printf("qcp_headsize %d\n",QCP_HEADER_SIZE);
 		printf("QCP format\n");
 	} else if ((frame_format == 2) && (rec_type == 3)) /*AMR file*/ {
 	        lseek(fd, 0, SEEK_SET);
         	write(fd, (char *)&amr_header, AMR_HEADER_SIZE);
+		printf("AMR format\n");
 	} else
 		printf("DSP format\n");
 
@@ -1119,7 +1145,7 @@ done:
 	ioctl(afd, AUDIO_GET_STATS, &stats);
 	printf("\n read_bytes = %d, read_frame_counts = %d\n",datasize, framecnt);
 	ioctl(afd, AUDIO_STOP, 0);
-	if((frame_format == 1) || ((frame_format == 2) && (rec_type != 3))) { /* QCP file */
+	if((frame_format == 1) || ((frame_format == 2) && (rec_type < 3))) { /* QCP file */
 		create_qcp_header(datasize, framecnt);
 	        lseek(fd, 0, SEEK_SET);
 		write(fd, (char *)&append_header, QCP_HEADER_SIZE);
@@ -1281,12 +1307,12 @@ int voiceenc_control_handler(void *private_data)
 const char *voiceenc_help_txt =
 	"Voice encoder \n \
 echo \"voiceenc -id=xxx -infile=path_of_inputfile -out=path_of_outputfile -type=yy -fmt=zz -dtx=yy -min=zz -max=yy -src=zz -frames=ww -mode=zz -tgt=zz\" > %s \n\
-type: 1 - qcelp, 2 - evrc, 3 - amrnb \n \
+type: 1 - qcelp, 2 - evrc, 3 - amrnb, 4 - amrwb\n \
 fmt: 0 - dsp 1 - qcp[dsp transcode] 2 - qcp [no dsp transcode] \n \
 src: 0 - Uplink 1 - Downlink, 2 - UL/DL, 3 - Mic \n \
 dtx: 0 - disable 1 - enable \n \
 tgt: 08 - for 8660 target, default 7k target \n \
-min:max: rate qcelp 1 to 4, rate evrc 1 to 4[exclude 2], rate amr 1 to 7 \n \
+min:max: rate qcelp 1 to 4, rate evrc 1 to 4[exclude 2], rate amr 1 to 7, rate amrwb 0 to 8\n \
 frames: number of frames per buffer(default 1)\n \
 mode: 0 - Tunnel 1 - NonTunnel\n \
 examples: \n\
