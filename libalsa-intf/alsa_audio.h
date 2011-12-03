@@ -178,4 +178,92 @@ int mixer_ctl_select(struct mixer_ctl *ctl, const char *value);
 void mixer_ctl_get(struct mixer_ctl *ctl, unsigned *value);
 int mixer_ctl_set_value(struct mixer_ctl *ctl, int count, char ** argv);
 
+
+#define MAX_NUM_CODECS 32
+
+/* compressed audio support */
+struct snd_compr_caps {
+        __u32 num_codecs;
+        __u32 min_fragment_size;
+        __u32 max_fragment_size;
+        __u32 min_fragments;
+        __u32 max_fragments;
+        __u32 codecs[MAX_NUM_CODECS];
+        __u32 reserved[11];
+};
+
+struct snd_enc_wma {
+        __u32 super_block_align; /* WMA Type-specific data */
+};
+
+struct snd_enc_vorbis {
+        int quality;
+        __u32 managed;
+        __u32 max_bit_rate;
+        __u32 min_bit_rate;
+        __u32 downmix;
+};
+
+struct snd_enc_real {
+        __u32 quant_bits;
+        __u32 start_region;
+        __u32 num_regions;
+};
+
+struct snd_enc_flac {
+        __u32 num;
+        __u32 gain;
+};
+
+struct snd_enc_generic {
+        __u32 bw;       /* encoder bandwidth */
+        int reserved[15];
+};
+
+union snd_codec_options {
+        struct snd_enc_wma wma;
+        struct snd_enc_vorbis vorbis;
+        struct snd_enc_real real;
+        struct snd_enc_flac flac;
+        struct snd_enc_generic generic;
+};
+
+struct snd_codec {
+        __u32 id;
+        __u32 ch_in;
+        __u32 ch_out;
+        __u32 sample_rate;
+        __u32 bit_rate;
+        __u32 rate_control;
+        __u32 profile;
+        __u32 level;
+        __u32 ch_mode;
+        __u32 format;
+        __u32 align;
+        union snd_codec_options options;
+        __u32 reserved[3];
+};
+
+struct snd_compressed_buffer {
+        size_t fragment_size;
+        int fragments;
+};
+
+/* */
+struct snd_compr_params {
+        struct snd_compressed_buffer buffer;
+        struct snd_codec codec;
+};
+#define SNDRV_COMPRESS_GET_CAPS		_IOWR('C', 0x00, struct snd_compr_caps *)
+#define SNDRV_COMPRESS_SET_PARAMS	_IOW('C', 0x02, struct snd_compr_params *)
+
+
+
+
+
+
+
+
+
+
 #endif
