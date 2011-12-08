@@ -41,6 +41,7 @@ static debug = 0;
 static uint32_t play_max_sz = 2147483648LL;
 static int format = SNDRV_PCM_FORMAT_S16_LE;
 static int period = 0;
+static int compressed = 0;
 
 static struct option long_options[] =
 {
@@ -52,6 +53,7 @@ static struct option long_options[] =
     {"channel", 1, 0, 'C'},
     {"format", 1, 0, 'F'},
     {"period", 1, 0, 'B'},
+    {"compressed", 0, 0, 'T'},
     {0, 0, 0, 0}
 };
 
@@ -130,8 +132,8 @@ static int set_params(struct pcm *pcm)
     sparams->period_step = 1;
     sparams->avail_min = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4;
     /* start after at least two periods are prefilled */
-    sparams->start_threshold = (pcm->flags & PCM_MONO) ? pcm->period_size : pcm->period_size/2;
-    sparams->stop_threshold = (pcm->flags & PCM_MONO) ? pcm->buffer_size/2 : pcm->buffer_size/4;
+    sparams->start_threshold = pcm->buffer_size;
+    sparams->stop_threshold = pcm->buffer_size;
     sparams->xfer_align = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4; /* needed for old kernels */
     sparams->silence_size = 0;
     sparams->silence_threshold = 0;
@@ -187,6 +189,24 @@ static int play_file(unsigned rate, unsigned channels, int fd,
         pcm_close(pcm);
         return -EBADFD;
     }
+
+    if (compressed) {
+       struct snd_compr_caps compr_cap;
+       struct snd_compr_params compr_params;
+       if (ioctl(pcm->fd, SNDRV_COMPRESS_GET_CAPS, &compr_cap)) {
+          fprintf(stderr, "Aplay: SNDRV_COMPRESS_GET_CAPS, failed Error no %d \n", errno);
+          pcm_close(pcm);
+          return -errno;
+       }
+       if (!period)
+           period = compr_cap.min_fragment_size;
+       compr_params.codec.id = compr_cap.codecs[0];
+       if (ioctl(pcm->fd, SNDRV_COMPRESS_SET_PARAMS, &compr_params)) {
+          fprintf(stderr, "Aplay: SNDRV_COMPRESS_SET_PARAMS,failed Error no %d \n", errno);
+          pcm_close(pcm);
+          return -errno;
+       }
+    }
     pcm->channels = channels;
     pcm->rate = rate;
     pcm->flags = flags;
@@ -228,8 +248,8 @@ static int play_file(unsigned rate, unsigned channels, int fd,
         if (debug)
           fprintf(stderr, "Aplay:bufsize = %d\n", bufsize);
 
-        pfd[0].fd = pcm->fd;
-        pfd[0].events = POLLOUT;
+        pfd[0].fd = pcm->timer_fd;
+        pfd[0].events = POLLIN;
 
         frames = (pcm->flags & PCM_MONO) ? (bufsize / 2) : (bufsize / 4);
         for (;;) {
@@ -254,8 +274,6 @@ static int play_file(unsigned rate, unsigned channels, int fd,
               * less than avail_min we need to wait
               */
              avail = pcm_avail(pcm);
-             if (debug)
-                 fprintf(stderr, "Aplay:avail 1 = %d frames = %d\n",avail, frames);
              if (avail < 0)
                  return avail;
              if (avail < pcm->sw_p->avail_min) {
@@ -270,6 +288,7 @@ static int play_file(unsigned rate, unsigned channels, int fd,
              dst_addr = dst_address(pcm);
 
              if (debug) {
+                 fprintf(stderr, "dst_addr = 0x%08x\n", dst_addr);
                  fprintf(stderr, "Aplay:avail = %d frames = %d\n",avail, frames);
                  fprintf(stderr, "Aplay:sync_ptr->s.status.hw_ptr %ld  pcm->buffer_size %d  sync_ptr->c.control.appl_ptr %ld\n",
                             pcm->sync_ptr->s.status.hw_ptr,
@@ -280,6 +299,7 @@ static int play_file(unsigned rate, unsigned channels, int fd,
               * Read from the file to the destination buffer in kernel mmaped buffer
               * This reduces a extra copy of intermediate buffer.
               */
+             memset(dst_addr, 0x0, bufsize);
              err = read(fd, dst_addr , bufsize);
              if (debug)
                  fprintf(stderr, "read %d bytes from file\n", err);
@@ -311,7 +331,6 @@ static int play_file(unsigned rate, unsigned channels, int fd,
               * If we have reached start threshold of buffer prefill,
               * its time to start the driver.
               */
-             if (pcm->sync_ptr->c.control.appl_ptr >= pcm->sw_p->start_threshold) {
                  if(start)
                      goto start_done;
                  if (ioctl(pcm->fd, SNDRV_PCM_IOCTL_START)) {
@@ -328,9 +347,23 @@ static int play_file(unsigned rate, unsigned channels, int fd,
                     }
                 } else
                     start = 1;
-            }
 start_done:
                 offset += frames;
+        }
+        while(1) {
+            pcm->sync_ptr->flags = SNDRV_PCM_SYNC_PTR_APPL | SNDRV_PCM_SYNC_PTR_AVAIL_MIN;//SNDRV_PCM_SYNC_PTR_HWSYNC;
+            sync_ptr(pcm);
+            /*
+             * Check for the available buffer in driver. If available buffer is
+             * less than avail_min we need to wait
+             */
+            if (pcm->sync_ptr->s.status.hw_ptr >= pcm->sync_ptr->c.control.appl_ptr) {
+                fprintf(stderr, "Aplay:sync_ptr->s.status.hw_ptr %ld  sync_ptr->c.control.appl_ptr %ld\n",
+                           pcm->sync_ptr->s.status.hw_ptr,
+                           pcm->sync_ptr->c.control.appl_ptr);
+                break;
+            } else
+                poll(pfd, nfds, TIMEOUT_INFINITE);
         }
     } else {
         if (pcm_prepare(pcm)) {
@@ -403,6 +436,12 @@ int play_wav(const char *fg, int rate, int ch, const char *device, const char *f
                 return fd;
             }
         }
+        if (compressed) {
+            hdr.sample_rate = rate;
+            hdr.num_channels = ch;
+            goto ignore_header;
+        }
+
         if (read(fd, &hdr, sizeof(hdr)) != sizeof(hdr)) {
             fprintf(stderr, "Aplay:aplay: cannot read header\n");
             return -errno;
@@ -428,6 +467,7 @@ int play_wav(const char *fg, int rate, int ch, const char *device, const char *f
         hdr.sample_rate = rate;
         hdr.num_channels = ch;
     }
+ignore_header:
     if (!strncmp(fg, "M", sizeof("M")))
         flag = PCM_MMAP;
     else if (!strncmp(fg, "N", sizeof("N")))
@@ -459,6 +499,7 @@ int main(int argc, char **argv)
                 "-V		-- verbose\n"
 		"-F             -- Format\n"
                 "-B             -- Period\n"
+                "-T             -- Compressed\n"
                 "<file> \n");
            fprintf(stderr, "Formats Supported:\n");
            for (i = 0; i <= SNDRV_PCM_FORMAT_LAST; ++i)
@@ -467,7 +508,7 @@ int main(int argc, char **argv)
            fprintf(stderr, "\nSome of these may not be available on selected hardware\n");
            return 0;
      }
-     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:B:", long_options, &option_index)) != -1) {
+     while ((c = getopt_long(argc, argv, "PVMD:R:C:F:B:T:", long_options, &option_index)) != -1) {
        switch (c) {
        case 'P':
           pcm_flag = 0;
@@ -493,6 +534,9 @@ int main(int argc, char **argv)
        case 'B':
           period = (int)strtol(optarg, NULL, 0);
           break;
+       case 'T':
+          compressed = 1;
+          break;
        default:
           printf("\nUsage: aplay [options] <file>\n"
                 "options:\n"
@@ -504,6 +548,7 @@ int main(int argc, char **argv)
 		"-R             -- Rate\n"
 		"-F             -- Format\n"
                 "-B             -- Period\n"
+                "-T             -- Compressed\n"
                 "<file> \n");
            fprintf(stderr, "Formats Supported:\n");
            for (i = 0; i < SNDRV_PCM_FORMAT_LAST; ++i)
