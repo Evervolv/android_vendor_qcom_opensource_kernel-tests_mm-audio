@@ -80,6 +80,7 @@ typedef struct TIMESTAMP{
 } __attribute__ ((packed)) TIMESTAMP;
 
 struct meta_in{
+	unsigned char rsv[18];
 	unsigned short offset;
 	TIMESTAMP ntimestamp;
 	unsigned int nflags;
@@ -95,6 +96,7 @@ struct meta_out_dsp{
 } __attribute__ ((packed));
 
 struct dec_meta_out{
+	unsigned int rsv[7];
 	unsigned int num_of_frames;
 	struct meta_out_dsp meta_out_dsp[];
 } __attribute__ ((packed));
@@ -571,8 +573,8 @@ static int fill_buffer(void *buf, unsigned sz, void *cookie)
 	printf("%s:frame count %d\n", __func__, audio_data->frame_count);
 	#endif
 	if (audio_data->mode) {
-		meta.ntimestamp.LowPart = 0;
-	        meta.ntimestamp.HighPart = (unsigned long long)(audio_data->frame_count);
+	        meta.ntimestamp.HighPart = 0;
+	        meta.ntimestamp.LowPart = (unsigned long long)(audio_data->frame_count * 0x10000);
 		meta.offset = sizeof(struct meta_in);
 	        audio_data->frame_count++;
 	#ifdef DEBUG_LOCAL
@@ -739,7 +741,7 @@ static void *wma_read_thread_8660(void *arg)
 			break;
 		}
 		meta_out_ptr = (struct dec_meta_out *)aio_op_buf[out_free_indx].buf_addr;
-		meta_out_dsp = (struct meta_out_dsp *)(((char *)meta_out_ptr + sizeof(meta_out_ptr->num_of_frames)));
+		meta_out_dsp = (struct meta_out_dsp *)(((char *)meta_out_ptr + sizeof(struct dec_meta_out)));
 		printf("nr of frames %d\n", meta_out_ptr->num_of_frames);
 #ifdef DEBUG_LOCAL
 		printf("%s:msw ts 0x%8x, lsw_ts 0x%8x, nflags 0x%8x\n", __func__,
@@ -747,7 +749,7 @@ static void *wma_read_thread_8660(void *arg)
 			meta_out_dsp->lsw_ts,
 			meta_out_dsp->nflags);
 #endif
-		first_frame_offset = meta_out_dsp->offset_to_frame + sizeof(meta_out_ptr->num_of_frames);
+		first_frame_offset = meta_out_dsp->offset_to_frame + sizeof(struct dec_meta_out);
 		total_frame_size = 0;
 		if(meta_out_ptr->num_of_frames != 0xFFFFFFFF) {
 			// Go over all meta data field to find exact frame size
@@ -889,7 +891,7 @@ static void *wma_dec_event_8660(void *arg)
 						event.event_payload.aio_buf.data_len);
 					meta_out_ptr = (struct dec_meta_out *)event.event_payload.aio_buf.buf_addr;
 					out_data_indx =(int) event.event_payload.aio_buf.private_data;
-					meta_out_dsp = (struct meta_out_dsp *)(((char *)meta_out_ptr + sizeof(meta_out_ptr->num_of_frames)));
+					meta_out_dsp = (struct meta_out_dsp *)(((char *)meta_out_ptr + sizeof(struct dec_meta_out)));
 					//OutPut EOS reached
 					if (meta_out_dsp->nflags == EOS) {
 			  			eof = 1;
@@ -1012,7 +1014,7 @@ static int wma_start_8660(struct audtest_config *clnt_config)
 	if(audio_data->formattag == 0x161) {
 		struct msm_audio_wma_config_v2 wma_config;
 		wma_config.numchannels = audio_data->channels;
-		wma_config.avgbytespersecond = audio_data->bps;
+		wma_config.avgbytespersecond = audio_data->bps/8;
 		wma_config.samplingrate = audio_data->freq;
 		wma_config.encodeopt = audio_data->encopt;
 		wma_config.format_tag = audio_data->formattag;
@@ -1026,7 +1028,7 @@ static int wma_start_8660(struct audtest_config *clnt_config)
 	} else {
 		struct msm_audio_wmapro_config wmapro_config;
 		wmapro_config.numchannels = audio_data->channels;
-		wmapro_config.avgbytespersecond = audio_data->bps;
+		wmapro_config.avgbytespersecond = audio_data->bps/8;
 		wmapro_config.samplingrate = audio_data->freq;
 		wmapro_config.encodeopt = audio_data->encopt;
 		wmapro_config.formattag = audio_data->formattag;
@@ -1135,8 +1137,7 @@ static int wma_start_8660(struct audtest_config *clnt_config)
 		aio_ip_buf[n].data_len = sz; 
 		aio_buf.private_data = aio_ip_buf[n].private_data;
 		printf("ASYNC_WRITE addr %p len %d\n", aio_buf.buf_addr,
-			aio_buf.buf_len);
-		printf("fill_buffer returned %d\n", sz);
+			aio_buf.data_len);
 		rc = ioctl(afd, AUDIO_ASYNC_WRITE, &aio_buf);
 		if(rc < 0) {
 			printf( "error on async write=%d\n",rc);
