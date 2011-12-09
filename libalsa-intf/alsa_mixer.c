@@ -296,7 +296,7 @@ static void print_dB(long dB)
 
 int mixer_ctl_read_tlv(struct mixer_ctl *ctl,
                     unsigned int *tlv,
-                    long *min, long *max)
+		    long *min, long *max, unsigned int *tlv_type)
 {
     unsigned int tlv_size = DEFAULT_TLV_SIZE;
     unsigned int type;
@@ -325,6 +325,7 @@ int mixer_ctl_read_tlv(struct mixer_ctl *ctl,
         free(xtlv);
 
         type = tlv[0];
+	*tlv_type = type;
         size = tlv[1];
         switch (type) {
         case SNDRV_CTL_TLVT_DB_SCALE: {
@@ -382,6 +383,7 @@ void mixer_ctl_get(struct mixer_ctl *ctl, unsigned *value)
     unsigned int n;
     unsigned int *tlv = NULL;
     enum ctl_type type;
+    unsigned int *tlv_type;
     long min, max;
 
     if (is_volume(ctl->info->id.name, &type)) {
@@ -390,7 +392,7 @@ void mixer_ctl_get(struct mixer_ctl *ctl, unsigned *value)
        if (tlv == NULL) {
            LOGE("failed to allocate memory\n");
        } else {
-           mixer_ctl_read_tlv(ctl, tlv, &min, &max);
+	   mixer_ctl_read_tlv(ctl, tlv, &min, &max, &tlv_type);
            free(tlv);
        }
     }
@@ -517,6 +519,7 @@ int mixer_ctl_set(struct mixer_ctl *ctl, unsigned percent)
     unsigned int *tlv = NULL;
     enum ctl_type type;
     int volume = 0;
+    unsigned int tlv_type;
 
     if (!ctl) {
         LOGV("can't find control\n");
@@ -528,10 +531,25 @@ int mixer_ctl_set(struct mixer_ctl *ctl, unsigned percent)
         tlv = calloc(1, DEFAULT_TLV_SIZE);
         if (tlv == NULL) {
             LOGE("failed to allocate memory\n");
-        } else if (!mixer_ctl_read_tlv(ctl, tlv, &min, &max)) {
-            percent = (long)convert_prange1(percent, min, max);
-            percent = check_range(percent, min, max);
-            volume = 1;
+        } else if (!mixer_ctl_read_tlv(ctl, tlv, &min, &max, &tlv_type)) {
+            switch(tlv_type) {
+            case SNDRV_CTL_TLVT_DB_LINEAR:
+                LOGV("tlv db linear: b4 %d\n", percent);
+
+		if (min < 0) {
+			max = max - min;
+			min = 0;
+		}
+                percent = check_range(percent, min, max);
+                LOGV("tlv db linear: %d %d %d\n", percent, min, max);
+                volume = 1;
+                break;
+            default:
+                percent = (long)convert_prange1(percent, min, max);
+                percent = check_range(percent, min, max);
+                volume = 1;
+                break;
+            }
         } else
             LOGV("mixer_ctl_read_tlv failed\n");
         free(tlv);
@@ -579,35 +597,52 @@ int mixer_ctl_set(struct mixer_ctl *ctl, unsigned percent)
  */
 
 static int set_volume_simple(struct mixer_ctl *ctl,
-                  char **ptr, long pmin, long pmax, int count)
+    char **ptr, long pmin, long pmax, int count, unsigned int tlv_type)
 {
     long val, orig;
     char *p = *ptr, *s;
     struct snd_ctl_elem_value ev;
     unsigned n;
 
-    if (*p == ':')
-          p++;
-    if (*p == '\0' || (!isdigit(*p) && *p != '-'))
-          goto skip;
+    switch(tlv_type) {
+        case SNDRV_CTL_TLVT_DB_LINEAR:
+            val = atoi(ptr[0]);
+            LOGV("tlv db linear: b4 %d\n", val);
 
-    s = p;
-    val = strtol(s, &p, 10);
-    if (*p == '.') {
-         p++;
-         strtol(p, &p, 10);
+            if (pmin < 0) {
+                pmax = pmax - pmin;
+                pmin = 0;
+            }
+            val = check_range(val, pmin, pmax);
+            LOGV("tlv db linear: %d %d %d\n", val, pmin, pmax);
+            break;
+
+        default:
+            if (*p == ':')
+                p++;
+            if (*p == '\0' || (!isdigit(*p) && *p != '-'))
+                goto skip;
+
+            s = p;
+            val = strtol(s, &p, 10);
+            if (*p == '.') {
+                p++;
+                strtol(p, &p, 10);
+            }
+            if (*p == '%') {
+                val = (long)convert_prange1(strtod(s, NULL), pmin, pmax);
+                p++;
+            } else if (p[0] == 'd' && p[1] == 'B') {
+                val = (long)(strtod(s, NULL) * 100.0);
+                p += 2;
+            } else {
+                return -EINVAL;
+            }
+            val = check_range(val, pmin, pmax);
+            LOGV("val = %x", val);
+
+            break;
     }
-    if (*p == '%') {
-         val = (long)convert_prange1(strtod(s, NULL), pmin, pmax);
-         p++;
-    } else if (p[0] == 'd' && p[1] == 'B') {
-         val = (long)(strtod(s, NULL) * 100.0);
-         p += 2;
-    } else {
-         return -EINVAL;
-    }
-    val = check_range(val, pmin, pmax);
-    LOGV("val = %x", val);
 
     if (!ctl) {
         LOGV("can't find control\n");
@@ -661,15 +696,16 @@ int mixer_ctl_set_value(struct mixer_ctl *ctl, int count, char ** argv)
     unsigned int *tlv = NULL;
     long min, max;
     enum ctl_type type;
+    unsigned int tlv_type;
 
     if (is_volume(ctl->info->id.name, &type)) {
         LOGV("capability: volume\n");
         tlv = calloc(1, DEFAULT_TLV_SIZE);
         if (tlv == NULL) {
             LOGE("failed to allocate memory\n");
-        } else if (!mixer_ctl_read_tlv(ctl, tlv, &min, &max)) {
+        } else if (!mixer_ctl_read_tlv(ctl, tlv, &min, &max, &tlv_type)) {
             LOGV("min = %x max = %x", min, max);
-            if (set_volume_simple(ctl, argv, min, max, count))
+            if (set_volume_simple(ctl, argv, min, max, count,tlv_type))
                 mixer_ctl_mulvalues(ctl, count, argv);
         } else
             LOGV("mixer_ctl_read_tlv failed\n");
