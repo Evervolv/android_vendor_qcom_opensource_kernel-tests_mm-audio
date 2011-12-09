@@ -384,6 +384,42 @@ SectionDevice
 EndSection
 
 SectionDevice
+
+        Name "QMIC"
+        Comment "Quad mic device"
+
+        EnableSequence
+                'SLIM_0_TX Channels':0:Four
+                'SLIM TX7 MUX':0:DEC1
+                'DEC1 MUX':0:DMIC1
+                'SLIM TX8 MUX':0:DEC2
+                'DEC2 MUX':0:DMIC2
+                'SLIM TX9 MUX':0:DEC3
+                'DEC3 MUX':0:DMIC3
+                'SLIM TX10 MUX':0:DEC4
+                'DEC4 MUX':0:DMIC4
+                'MICBIAS1 CAPLESS Switch':1:1
+                'MICBIAS3 CAPLESS Switch':1:1
+        EndSequence
+
+        DisableSequence
+                'SLIM TX7 MUX':0:ZERO
+                'DEC1 MUX':0:ZERO
+                'SLIM TX8 MUX':0:ZERO
+                'DEC2 MUX':0:ZERO
+                'SLIM TX9 MUX':0:ZERO
+                'DEC3 MUX':0:ZERO
+                'SLIM TX10 MUX':0:ZERO
+                'DEC4 MUX':0:ZERO
+                'MICBIAS1 CAPLESS Switch':1:0
+                'MICBIAS3 CAPLESS Switch':1:0
+        EndSequence
+
+        ACDBID  19:2
+
+EndSection
+
+SectionDevice
 	Name "DMIC Broadside"
 	Comment "Dual MIC Broadside Tx device"
 
@@ -1515,6 +1551,24 @@ SectionModifier
 EndSection
 
 SectionModifier
+        Name "Capture MusicQMIC"
+
+        EnableSequence
+                'MultiMedia1 Mixer SLIM_0_TX':1:1
+        EndSequence
+
+        DisableSequence
+                'MultiMedia1 Mixer SLIM_0_TX':1:0
+        EndSequence
+
+        # ALSA PCMs
+        CapturePCM 0
+        PlaybackPCM 0
+        ACDBID 0:0
+
+EndSection
+
+SectionModifier
 	Name "Capture MusicBT SCO Tx"
 
 	EnableSequence
@@ -1593,6 +1647,24 @@ SectionModifier
 	PlaybackPCM 2
 	capturePCM 2
 	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+        Name "Play VoiceQMIC"
+
+        EnableSequence
+                'SLIM_0_RX_Voice Mixer CSVoice':1:1
+                'Voice_Tx Mixer SLIM_0_TX_Voice':1:1
+        EndSequence
+
+        DisableSequence
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 2
+        capturePCM 2
+        ACDBID 0:0
 
 EndSection
 
@@ -2289,5 +2361,23 @@ SectionModifier
 	PlaybackPCM 3
 	capturePCM 3
 	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+        Name "Play VOIPQMIC"
+
+        EnableSequence
+                'SLIM_0_RX_Voice Mixer Voip':1:1
+                'Voip_Tx Mixer SLIM_0_TX_Voip':1:1
+        EndSequence
+
+        DisableSequence
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 3
+        capturePCM 3
+        ACDBID 0:0
 
 EndSection
