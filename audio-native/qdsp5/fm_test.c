@@ -79,7 +79,7 @@ int fm_play(struct audtest_config *cfg)
 #endif
 #endif
 
-	perror("start playback\n");
+	printf("start playback\n");
 	if (ioctl(afd, AUDIO_START, 0) >= 0) {
 		playback_stop = 0;
 		while (playback_stop != 1)
@@ -102,6 +102,11 @@ int fm_play(struct audtest_config *cfg)
 	if (devmgr_unregister_session(dec_id, DIR_RX) < 0)
 			ret = -1;
 exit:
+#endif
+#ifdef AUDIO7X27A
+	if (ioctl(afd, AUDIO_STOP, 0) < 0) {
+		printf("fm_play: AUDIO_STOP Failed !!\n");
+	}
 #endif
 	close(afd);
 	return ret;
@@ -162,13 +167,15 @@ int fm_play_control_handler(void *private_data)
 	if (token != NULL) {
 		drvfd = (int) private_data;
 		if (!memcmp(token, "-cmd=", (sizeof("-cmd=") - 1))) {
-#if defined(QC_PROP) && defined(AUDIOV2)
+#if (defined(QC_PROP) && defined(AUDIOV2)) || defined(AUDIO7X27A)
 			token = &token[sizeof("-cmd=") - 1];
 			printf("%s: cmd %s\n", __FUNCTION__, token);
 			if (!strcmp(token, "stop")) {
 				playback_stop = 1;
 				printf("playback_stop = %d\n",playback_stop);
-			} else if (!strcmp(token, "volume")) {
+			}
+#if defined(QC_PROP) && defined(AUDIOV2)
+			else if (!strcmp(token, "volume")) {
 				int rc;
 				unsigned short dec_id;
 				token = strtok(NULL, " ");
@@ -184,6 +191,7 @@ int fm_play_control_handler(void *private_data)
 					}
 				}
 			}
+#endif
 #else
 			token = &token[sizeof("-id=") - 1];
 #endif

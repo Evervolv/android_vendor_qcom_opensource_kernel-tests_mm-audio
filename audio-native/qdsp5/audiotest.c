@@ -115,8 +115,8 @@ void wait_child_threads(void) {
 
 /* Index by test module ID */
 pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
-	pcm_play_control_handler, pcm_rec_control_handler, 
-	mp3_play_control_handler, aac_play_control_handler, 
+	pcm_play_control_handler, pcm_rec_control_handler,
+	mp3_play_control_handler, aac_play_control_handler,
 	aac_rec_control_handler, amrnb_play_control_handler,
 	amrnb_rec_control_handler, qcp_play_control_handler,
 	NULL, wma_play_control_handler, voicememo_control_handler,
@@ -134,7 +134,7 @@ pb_control_func audiotest_pb_controllers[AUDIOTEST_MAX_TEST_MOD] = {
 #else
 #ifdef AUDIO7X27A
 	NULL,voiceenc_control_handler,
-	NULL, NULL, NULL, NULL, NULL,
+	NULL, fm_play_control_handler, NULL, NULL, NULL,
 #else
 	NULL, NULL, NULL, NULL, NULL,
 	NULL, NULL,
@@ -148,15 +148,15 @@ int pb_control_read_params(void) {
 	struct audiotest_thread_context *context;
 	/* Look for ID and cmd */
 
-	token = strtok(NULL, " "); 
-	if ((token != NULL) && 
+	token = strtok(NULL, " ");
+	if ((token != NULL) &&
 		(!memcmp(token,"-id=", (sizeof("-id=") -1)))) {
 		id = atoi(&token[sizeof("-id=") - 1]);
 		printf("Context id =%d\n", id);
 		if (((context = find_context(id)) != NULL) &&
 			(audiotest_pb_controllers[context->type] != NULL)) {
 		/* Call control function of test module */
-			ret_val = audiotest_pb_controllers[context->type]( 
+			ret_val = audiotest_pb_controllers[context->type](
 				context->config.private_data);
 		} else {
 			ret_val = -1;
@@ -196,6 +196,7 @@ struct audiotest_case_type audiotest_case_list[] = {
 	{ "sndsetdev", sndsetdev_read_params, sndsetdev_help_menu, NULL },
 #ifdef AUDIO7X27A
 	{ "voiceenc", voiceenc_read_params, voiceenc_help_menu, NULL } ,
+	{ "playfm", fm_play_read_params, fm_play_help_menu, NULL } ,
 #endif
 #ifdef AUDIOV2
 	{ "voiceenc", voiceenc_read_params, voiceenc_help_menu, NULL } ,

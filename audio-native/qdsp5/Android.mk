@@ -98,6 +98,7 @@ endif
 else
 ifeq ($(call is-board-platform,msm7627a),true)
 LOCAL_SRC_FILES += voiceenctest.c
+LOCAL_SRC_FILES += fm_test.c
 endif
 endif
 
