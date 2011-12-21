@@ -132,7 +132,7 @@ static int set_params(struct pcm *pcm)
     sparams->period_step = 1;
     sparams->avail_min = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4;
     /* start after at least two periods are prefilled */
-    sparams->start_threshold = pcm->buffer_size;
+    sparams->start_threshold = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4;
     sparams->stop_threshold = pcm->buffer_size;
     sparams->xfer_align = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4; /* needed for old kernels */
     sparams->silence_size = 0;
