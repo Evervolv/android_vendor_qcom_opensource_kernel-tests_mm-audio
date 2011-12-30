@@ -325,11 +325,16 @@ static int play_file(unsigned rate, unsigned channels, int fd,
                  continue;
              }
              if (debug) {
-                 fprintf(stderr, "Aplay:sync_ptr 2 \n");
-                 fprintf(stderr, "Aplay:sync_ptr->s.status.hw_ptr %ld  pcm->buffer_size %d  sync_ptr->c.control.appl_ptr %ld\n",
+                 fprintf(stderr, "Aplay:sync_ptr->s.status.hw_ptr %ld  sync_ptr->c.control.appl_ptr %ld\n",
                             pcm->sync_ptr->s.status.hw_ptr,
-                            pcm->buffer_size,
                             pcm->sync_ptr->c.control.appl_ptr);
+                 if (compressed && start) {
+                    struct snd_compr_tstamp tstamp;
+		    if (ioctl(pcm->fd, SNDRV_COMPRESS_TSTAMP, &tstamp))
+			fprintf(stderr, "Aplay: failed SNDRV_COMPRESS_TSTAMP\n");
+                    else
+	                fprintf(stderr, "timestamp = %lld\n", tstamp.timestamp);
+		}
              }
              /*
               * If we have reached start threshold of buffer prefill,

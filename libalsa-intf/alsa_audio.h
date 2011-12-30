@@ -255,16 +255,26 @@ struct snd_compr_params {
         struct snd_compressed_buffer buffer;
         struct snd_codec codec;
 };
-#define SNDRV_COMPRESS_GET_CAPS		_IOWR('C', 0x00, struct snd_compr_caps *)
-#define SNDRV_COMPRESS_SET_PARAMS	_IOW('C', 0x02, struct snd_compr_params *)
 
+struct snd_compr_tstamp {
+        size_t copied_bytes;
+        size_t copied_total;
+        size_t decoded;
+        size_t rendered;
+        __u32 sampling_rate;
+        uint64_t timestamp;
+};
 
-
-
-
-
-
-
-
+#define SNDRV_COMPRESS_GET_CAPS         _IOWR('C', 0x00, struct snd_compr_caps *)
+#define SNDRV_COMPRESS_GET_CODEC_CAPS   _IOWR('C', 0x01, struct snd_compr_codec_caps *)
+#define SNDRV_COMPRESS_SET_PARAMS       _IOW('C', 0x02, struct snd_compr_params *)
+#define SNDRV_COMPRESS_GET_PARAMS       _IOR('C', 0x03, struct snd_compr_params *)
+#define SNDRV_COMPRESS_TSTAMP           _IOR('C', 0x10, struct snd_compr_tstamp *)
+#define SNDRV_COMPRESS_AVAIL            _IOR('C', 0x11, struct snd_compr_avail *)
+#define SNDRV_COMPRESS_PAUSE            _IO('C', 0x20)
+#define SNDRV_COMPRESS_RESUME           _IO('C', 0x21)
+#define SNDRV_COMPRESS_START            _IO('C', 0x22)
+#define SNDRV_COMPRESS_STOP             _IO('C', 0x23)
+#define SNDRV_COMPRESS_DRAIN            _IO('C', 0x24)
 
 #endif
