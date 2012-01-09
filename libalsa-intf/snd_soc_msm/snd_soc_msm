@@ -32,4 +32,12 @@ SectionUseCase."FM A2DP REC" {
 File "FM_A2DP_REC"
 Comment "FM A2DP playback use case"
 }
+SectionUseCase."DL REC" {
+File "DL_REC"
+Comment "Voice Downlink Recording use case"
+}
+SectionUseCase."UL DL REC" {
+File "UL_DL_REC"
+Comment "Voice Uplink Downlink Recording use case"
+}
 # End of master file

@@ -2520,3 +2520,41 @@ SectionModifier
         ACDBID 0:0
 
 EndSection
+
+SectionModifier
+        Name "Capture Voice Downlink"
+
+        EnableSequence
+                'MultiMedia1 Mixer VOC_REC_DL':1:1
+        EndSequence
+
+        DisableSequence
+                'MultiMedia1 Mixer VOC_REC_DL':1:0
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 0
+        capturePCM 0
+        ACDBID 0:0
+
+EndSection
+
+SectionModifier
+        Name "Capture Voice Uplink Downlink"
+
+        EnableSequence
+                'MultiMedia1 Mixer VOC_REC_UL':1:1
+                'MultiMedia1 Mixer VOC_REC_DL':1:1
+        EndSequence
+
+        DisableSequence
+                'MultiMedia1 Mixer VOC_REC_UL':1:0
+                'MultiMedia1 Mixer VOC_REC_DL':1:0
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 0
+        capturePCM 0
+        ACDBID 0:0
+
+EndSection

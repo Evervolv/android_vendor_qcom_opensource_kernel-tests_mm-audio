@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -165,6 +165,8 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_VERB_FM_REC         "FM REC"
 #define SND_USE_CASE_VERB_FM_A2DP_REC   "FM A2DP REC"
 #define SND_USE_CASE_VERB_HIFI_REC       "HiFi Rec"
+#define SND_USE_CASE_VERB_DL_REC	 "DL REC"
+#define SND_USE_CASE_VERB_UL_DL_REC      "UL DL REC"
 
 #define SND_USE_CASE_DEV_FM_TX           "FM Tx"
 #define SND_USE_CASE_DEV_ANC_HEADSET     "ANC Headset"
@@ -192,6 +194,8 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_MOD_PLAY_LPA        "Play LPA"
 #define SND_USE_CASE_MOD_PLAY_VOIP       "Play VOIP"
 #define SND_USE_CASE_MOD_CAPTURE_VOIP    "Capture VOIP"
+#define SND_USE_CASE_MOD_CAPTURE_VOICE_DL       "Capture Voice Downlink"
+#define SND_USE_CASE_MOD_CAPTURE_VOICE_UL_DL    "Capture Voice Uplink Downlink"
 
 /* List utility functions for maintaining enabled devices and modifiers */
 static int snd_ucm_add_ident_to_list(struct snd_ucm_ident_node **head, const char *value);
