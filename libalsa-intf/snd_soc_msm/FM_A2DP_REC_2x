@@ -710,6 +710,20 @@ SectionDevice
 
 EndSection
 
+SectionDevice
+	Name "PROXY Rx"
+	Comment "PROXY Rx device"
+
+	EnableSequence
+	EndSequence
+
+	DisableSequence
+	EndSequence
+
+	ACDBID	0:0
+
+EndSection
+
 SectionModifier
 	Name "Play Music"
 	Comment "Modifier for music playback"
@@ -981,6 +995,24 @@ SectionModifier
 	EndSequence
 
 	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play MusicPROXY Rx"
+	Comment "Modifier for music playback"
+
+	EnableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia1':1:1
+	EndSequence
+
+	DisableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia1':1:0
+	EndSequence
+
 	CapturePCM 0
 	PlaybackPCM 0
 	ACDBID 0:0
@@ -1406,6 +1438,23 @@ SectionModifier
 
 	DisableSequence
 		'"INTERNAL_BT_SCO_RX Audio Mixer MultiMedia3':1:0
+	EndSequence
+
+	# ALSA PCMs
+	PlaybackPCM 4
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play LPAPROXY Rx"
+
+	EnableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia3':1:1
+	EndSequence
+
+	DisableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia3':1:0
 	EndSequence
 
 	# ALSA PCMs

@@ -62,6 +62,7 @@ extern "C" {
 #define DEVICE_HDMI_STEREO_RX_ACDB_ID                   18// HDMI_SPKR
 #define DEVICE_ANC_HEADSET_STEREO_RX_ACDB_ID            26//ANC RX, same as regular headset
 #define DEVICE_QUADMIC_ACDB_ID                          19// QUADMIC_SKPR
+#define DEVICE_PROXY_RX_ACDB_ID   	               DEVICE_HDMI_STEREO_RX_ACDB_ID
 
 /* mixer control type */
 #define TYPE_INT            0
@@ -187,6 +188,7 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_DEV_SPEAKER_DUAL_MIC_ENDFIRE "Speaker DMIC Endfire"
 #define SND_USE_CASE_DEV_HDMI_TX             "HDMI Tx"
 #define SND_USE_CASE_DEV_QUAD_MIC "QMIC"
+#define SND_USE_CASE_DEV_PROXY_RX     "PROXY Rx"
 
 #define SND_USE_CASE_MOD_PLAY_FM         "Play FM"
 #define SND_USE_CASE_MOD_CAPTURE_FM      "Capture FM"

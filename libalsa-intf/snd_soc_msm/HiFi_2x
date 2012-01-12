@@ -264,6 +264,24 @@ SectionVerb
 
 EndSection
 
+SectionVerb
+        Name "HiFiPROXY Rx"
+
+        EnableSequence
+                'AFE_PCM_RX Audio Mixer MultiMedia1':1:1
+        EndSequence
+
+        DisableSequence
+                'AFE_PCM_RX Audio Mixer MultiMedia1':1:0
+        EndSequence
+
+        # ALSA PCMs
+        CapturePCM 0
+        PlaybackPCM 0
+        ACDBID 0:0
+
+EndSection
+
 SectionDevice
 	Name "Earpiece"
 	Comment "Handset Rx device"
@@ -956,6 +974,20 @@ SectionDevice
 
 EndSection
 
+SectionDevice
+	Name "PROXY Rx"
+	Comment "PROXY Rx device"
+
+	EnableSequence
+	EndSequence
+
+	DisableSequence
+	EndSequence
+
+	ACDBID	0:0
+
+EndSection
+
 SectionModifier
 	Name "Play Music"
 
@@ -1223,6 +1255,24 @@ SectionModifier
 
 	DisableSequence
 		'INTERNAL_BT_SCO_RX Audio Mixer MultiMedia1':1:0
+	EndSequence
+
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+	Name "Play MusicPROXY Rx"
+
+	EnableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia1':1:1
+	EndSequence
+
+	DisableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia1':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -1638,6 +1688,23 @@ SectionModifier
 	# ALSA PCMs
 	PlaybackPCM 4
 	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+        Name "Play LPAPROXY Rx"
+
+        EnableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia3':1:1
+        EndSequence
+
+        DisableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia3':1:0
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 4
+        ACDBID 0:0
 
 EndSection
 
