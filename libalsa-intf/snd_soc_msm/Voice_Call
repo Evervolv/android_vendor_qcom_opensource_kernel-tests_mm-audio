@@ -2778,8 +2778,9 @@ SectionModifier
 	EndSequence
 
 	DisableSequence
-		'SLIM_0_RX_Voice Mixer Voip':1:0
-		'Voip_Tx Mixer SLIM_0_TX_Voip':1:0
+                'Internal BTSCO SampleRate':0:8000
+                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:0
+                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -2793,8 +2794,9 @@ SectionModifier
 	Name "Play VOIPBT SCO Tx"
 
 	EnableSequence
-		'SLIM_0_RX_Voice Mixer Voip':1:1
-		'Voip_Tx Mixer SLIM_0_TX_Voip':1:1
+                'Internal BTSCO SampleRate':1:8000
+                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:1
+                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:1
 	EndSequence
 
 	DisableSequence
@@ -2804,6 +2806,44 @@ SectionModifier
 	PlaybackPCM 3
 	capturePCM 3
 	ACDBID 0:0
+
+EndSection
+
+SectionModifier
+        Name "Play VOIPBT SCO WB Rx"
+
+        EnableSequence
+        EndSequence
+
+        DisableSequence
+                'Internal BTSCO SampleRate':0:8000
+                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:0
+                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:0
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 3
+        capturePCM 3
+        ACDBID 0:0
+
+EndSection
+
+SectionModifier
+        Name "Play VOIPBT SCO WB Tx"
+
+        EnableSequence
+                'Internal BTSCO SampleRate':1:16000
+                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:1
+                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:1
+        EndSequence
+
+        DisableSequence
+        EndSequence
+
+        # ALSA PCMs
+        PlaybackPCM 3
+        capturePCM 3
+        ACDBID 0:0
 
 EndSection
 
