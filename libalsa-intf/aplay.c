@@ -81,6 +81,7 @@ static int set_params(struct pcm *pcm)
      unsigned long periodSize, bufferSize, reqBuffSize;
      unsigned int periodTime, bufferTime;
      unsigned int requestedRate = pcm->rate;
+     int channels = (pcm->flags & PCM_MONO) ? 1 : ((pcm->flags & PCM_5POINT1)? 6 : 2 );
 
      params = (struct snd_pcm_hw_params*) calloc(1, sizeof(struct snd_pcm_hw_params));
      if (!params) {
@@ -101,7 +102,7 @@ static int set_params(struct pcm *pcm)
          param_set_min(params, SNDRV_PCM_HW_PARAM_PERIOD_TIME, 10);
      param_set_int(params, SNDRV_PCM_HW_PARAM_SAMPLE_BITS, 16);
      param_set_int(params, SNDRV_PCM_HW_PARAM_FRAME_BITS,
-                    pcm->channels - 1 ? 32 : 16);
+                    pcm->channels * 16);
      param_set_int(params, SNDRV_PCM_HW_PARAM_CHANNELS,
                     pcm->channels);
      param_set_int(params, SNDRV_PCM_HW_PARAM_RATE, pcm->rate);
@@ -130,11 +131,12 @@ static int set_params(struct pcm *pcm)
      // Get the current software parameters
     sparams->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
     sparams->period_step = 1;
-    sparams->avail_min = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4;
-    /* start after at least two periods are prefilled */
-    sparams->start_threshold = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4;
-    sparams->stop_threshold = pcm->buffer_size;
-    sparams->xfer_align = (pcm->flags & PCM_MONO) ? pcm->period_size/2 : pcm->period_size/4; /* needed for old kernels */
+
+    sparams->avail_min = pcm->period_size/(channels * 2) ;
+    sparams->start_threshold =  pcm->period_size/(channels * 2) ;
+    sparams->stop_threshold =  pcm->buffer_size ;
+    sparams->xfer_align =  pcm->period_size/(channels * 2) ; /* needed for old kernels */
+
     sparams->silence_size = 0;
     sparams->silence_threshold = 0;
 
@@ -173,6 +175,8 @@ static int play_file(unsigned rate, unsigned channels, int fd,
 
     if (channels == 1)
         flags |= PCM_MONO;
+    else if (channels == 6)
+	flags |= PCM_5POINT1;
     else
         flags |= PCM_STEREO;
 
@@ -416,7 +420,8 @@ int play_raw(const char *fg, int rate, int ch, const char *device, const char *f
     else if (!strncmp(fg, "N", sizeof("N")))
         flag = PCM_NMMAP;
 
-    fprintf(stderr, "aplay: Playing '%s':%s\n", fn, get_format_desc(format) );
+    fprintf(stderr, "aplay: Playing '%s': format %s ch = %d\n",
+		    fn, get_format_desc(format), ch );
     return play_file(rate, ch, fd, flag, device);
 }
 

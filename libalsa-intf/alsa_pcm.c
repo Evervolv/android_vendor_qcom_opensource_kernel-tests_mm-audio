@@ -550,11 +550,12 @@ static int pcm_write_mmap(struct pcm *pcm, void *data, unsigned count)
 static int pcm_write_nmmap(struct pcm *pcm, void *data, unsigned count)
 {
     struct snd_xferi x;
+    int channels = (pcm->flags & PCM_MONO) ? 1 : ((pcm->flags & PCM_5POINT1)? 6 : 2 );
 
     if (pcm->flags & PCM_IN)
         return -EINVAL;
     x.buf = data;
-    x.frames = (pcm->flags & PCM_MONO) ? (count / 2) : (count / 4);
+    x.frames =  (count / (channels * 2)) ;
 
     for (;;) {
         if (!pcm->running) {
