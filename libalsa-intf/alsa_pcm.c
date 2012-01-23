@@ -751,8 +751,12 @@ struct pcm *pcm_open(unsigned flags, char *device)
         pcm->card_no = atoi(tmp);
         strncat(dname, "D", sizeof("D"));
         tmp = device+5;
-        strncat(dname, tmp,1) ;
         pcm->device_no = atoi(tmp);
+	/* should be safe to assume pcm dev ID never exceed 99 */
+        if (pcm->device_no > 9)
+            strncat(dname, tmp, 2);
+        else
+            strncat(dname, tmp, 1);
         strncat(dname, "c", sizeof("c"));
     } else {
         strncpy(dname, "/dev/snd/pcmC", 17);
@@ -761,8 +765,12 @@ struct pcm *pcm_open(unsigned flags, char *device)
         pcm->card_no = atoi(tmp);
         strncat(dname, "D", sizeof("D"));
         tmp = device+5;
-        strncat(dname, tmp,1) ;
         pcm->device_no = atoi(tmp);
+	/* should be safe to assume pcm dev ID never exceed 99 */
+        if (pcm->device_no > 9)
+            strncat(dname, tmp, 2);
+        else
+            strncat(dname, tmp, 1);
         strncat(dname, "p", sizeof("p"));
     }
     if (pcm->flags & DEBUG_ON)
