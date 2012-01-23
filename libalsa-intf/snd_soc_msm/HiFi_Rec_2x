@@ -2557,7 +2557,7 @@ SectionModifier
 	EndSequence
 
 	DisableSequence
-		'SLIM_0_RX_Voice Mixer Voip':1:0
+		'HDMI_RX_Voice Mixer Voip':1:0
 		'Voip_Tx Mixer SLIM_0_TX_Voip':1:0
 	EndSequence
 
@@ -2590,8 +2590,8 @@ SectionModifier
 	Name "Play VOIPHDMI Tx"
 
 	EnableSequence
-		'HDMI_RX_Voice Mixer CSVoice':1:1
-		'Voice_Tx Mixer SLIM_0_TX_Voice':1:1
+		'HDMI_RX_Voice Mixer Voip':1:1
+		'Voip_Tx Mixer SLIM_0_TX_Voip':1:1
 	EndSequence
 
 	DisableSequence
@@ -2656,7 +2656,6 @@ SectionModifier
         # ALSA PCMs
         PlaybackPCM 0
         capturePCM 0
->>>>>>> 00b5f67... libalsa-intf: Add use cases for incall recording
         ACDBID 0:0
 
 EndSection
