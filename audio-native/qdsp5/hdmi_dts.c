@@ -1,7 +1,7 @@
 /* hdmi_dts.c - native PCM test application
  *
  * * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	char *device_name = "hdmi_pass_through";
 	int rc = 0;
 	unsigned int repetition_period = 0;
+	int exit_on_fail = 0;
 	unsigned int dma_buf_sz = 0;
 	unsigned int tmp = 0;
 	unsigned int frame_count = 0;
@@ -136,18 +137,12 @@ static int hdmi_dts_play(struct audtest_config *config)
 	/********** end of read_file ******************************************/
 
 
-	alsa_control = msm_mixer_open("/dev/snd/controlC0", 0);
-	if(alsa_control < 0) {
-		fprintf(stderr, "ERROR opening the ALSA mixer device\n");
-		rc = -1;
-		goto error_alsa_mixer_open;
-	}
-
 	dev_id = msm_get_device(device_name);
 
 	if (msm_en_device(dev_id,1)) {
 		fprintf(stderr, "could not enable device %s\n",
 				device_name);
+		exit_on_fail = 1;
 		goto error_en_alsa_dev;
 	}
 
@@ -155,6 +150,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	if (afd < 0) {
 		fprintf(stderr, "cannot open audio device\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_open_dev;
 	}
 
@@ -162,6 +158,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	rc = get_first_frame_info(&audio_codec_info);
 	if (rc < 0 ) {
 		fprintf(stderr, "Failed to get first frame indfo\n");
+		exit_on_fail = 1;
 		return -1;
 	}
 
@@ -173,6 +170,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	if(rc == -1) {
 		fprintf(stderr, "get_60958_61937_config failed\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_get_60958_61937_config;
 	}
 	dma_buf_sz = config_60958_61937.dma_buf_sz;
@@ -185,6 +183,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 		fprintf(stderr, "could not allocate memory for dts 61937 burst."
 			" burst size %u\n" , config_60958_61937.sz_61937_burst);
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_no_mem_dts_61937_burst;
 	}
 
@@ -197,6 +196,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 			"rep per frames. dts 60958rep per frame size %u\n" ,
 			config_60958_61937.rep_per_60958);
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_no_mem_hdmi_non_l_rep_per;
 	}
 
@@ -212,11 +212,13 @@ static int hdmi_dts_play(struct audtest_config *config)
 	if (ioctl(afd, AUDIO_SET_CONFIG, &aud_config)) {
 		fprintf(stderr, "could not set AUDIO_SET_IEC_CODEC_CONFIG\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_ioctl_audio_get_config;
 	}
 	if (ioctl(afd, AUDIO_GET_CONFIG, &audio_config)) {
 		fprintf(stderr, "could not get audio_config\n");
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_ioctl_audio_get_config;
 	}
 
@@ -236,6 +238,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
                         fprintf(stderr, "could not write pause frame %d\n", i);
                         rc = -1;
+			exit_on_fail = 1;
                         goto error_dev_write;
                 }
 	}
@@ -247,6 +250,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	if (rc < 0 ) {
 		fprintf(stderr, "%s: Unable to start driver\n", __func__);
 		rc = 1;
+		exit_on_fail = 1;
 		goto error_ioctl_audio_start;
 	}
 	/* Sending 192 block of 60958 frames to AVR before sending the actual
@@ -294,6 +298,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 	if (write(afd, hdmi_non_l_rep_per,1536 ) != 1536) {
 		fprintf(stderr, "could not write pause frame %d\n", i);
 		rc = -1;
+		exit_on_fail = 1;
 		goto error_dev_write;
 	}
 	/* Sending silent frames for initial duration allowing AVR to
@@ -343,6 +348,7 @@ static int hdmi_dts_play(struct audtest_config *config)
                 if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
                         fprintf(stderr, "could not write pause frame %d\n", i);
                         rc = -1;
+			exit_on_fail = 1;
                         goto error_dev_write;
                 }
         }
@@ -398,6 +404,7 @@ static int hdmi_dts_play(struct audtest_config *config)
 		}
 		if (write(afd, hdmi_non_l_rep_per, sz) != sz) {
                         fprintf(stderr, "could not write %s\n", DEV_FILE_NAME);
+			exit_on_fail = 1;
                         break;
                 }
 	}
@@ -422,21 +429,20 @@ error_open_dev:
 				device_name);
 
 error_en_alsa_dev:
-	alsa_control = msm_mixer_close();
-	if (alsa_control < 0)
-		fprintf(stderr, "Failed to close ALSA MIXER\n");
-
-error_alsa_mixer_open:
 	free(dts_frame);
 	fclose(fp);
 	deinit_60958_61937_framer();
 	free(dts_file_data);
 
 	repeat--;
-	if (repeat > 0)
+	if (repeat > 0) {
+		if(exit_on_fail == 1)
+                        goto exit;
 		sleep(5);
 	}
+	}
 	fprintf(stderr, "End of playback\n");
+exit:
 	play_state = 0;
 	return rc;
 }
