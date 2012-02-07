@@ -35,6 +35,7 @@ extern "C" {
 
 #include "alsa_ucm.h"
 #include "alsa_audio.h"
+#include <pthread.h>
 #define SND_UCM_END_OF_LIST "end"
 #define CONFIG_DIR "/system/etc/snd_soc_msm/"
 
@@ -139,6 +140,7 @@ struct snd_use_case_mgr {
     int current_tx_device;
     int current_rx_device;
     card_ctxt_t *card_ctxt_ptr;
+    pthread_t thr;
 };
 
 #define MAX_NUM_CARDS (sizeof(card_list)/sizeof(char *))

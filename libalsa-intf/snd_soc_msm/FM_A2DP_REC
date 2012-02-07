@@ -719,7 +719,7 @@ SectionDevice
 	Comment "PROXY Rx device"
 
 	EnableSequence
-	End Sequence
+	EndSequence
 
 	DisableSequence
 	EndSequence
@@ -1009,7 +1009,7 @@ SectionModifier
 	Name "Play MusicPROXY Rx"
 	Comment "Modifier for music playback"
 
-	Enable Sequence
+	EnableSequence
 		'AFE_PCM_RX Audio Mixer MultiMedia1':1:1
 	EndSequence
 
