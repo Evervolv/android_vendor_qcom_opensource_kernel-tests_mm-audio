@@ -490,7 +490,7 @@ int mmap_transfer_capture(struct pcm *pcm, void *data, unsigned offset,
 int pcm_prepare(struct pcm *pcm)
 {
     if (ioctl(pcm->fd, SNDRV_PCM_IOCTL_PREPARE)) {
-           LOGE("cannot prepare channel\n");
+           LOGE("cannot prepare channel: errno =%d\n", -errno);
            return -errno;
     }
     pcm->running = 1;
@@ -784,13 +784,23 @@ struct pcm *pcm_open(unsigned flags, char *device)
     }
     pcm->flags = flags;
 
-    pcm->fd = open(dname, O_RDWR);
+    pcm->fd = open(dname, O_RDWR|O_NONBLOCK);
     if (pcm->fd < 0) {
         free(pcm->sync_ptr);
         free(pcm);
-        LOGE("cannot open device '%s'", dname);
+        LOGE("cannot open device '%s', errno %d", dname, errno);
         return &bad_pcm;
     }
+
+    if (fcntl(pcm->fd, F_SETFL, fcntl(pcm->fd, F_GETFL) &
+            ~O_NONBLOCK) < 0) {
+        close(pcm->fd);
+        free(pcm->sync_ptr);
+        free(pcm);
+        LOGE("failed to change the flag, errno %d", errno);
+        return &bad_pcm;
+    }
+
     if (pcm->flags & PCM_MMAP)
         enable_timer(pcm);
 
