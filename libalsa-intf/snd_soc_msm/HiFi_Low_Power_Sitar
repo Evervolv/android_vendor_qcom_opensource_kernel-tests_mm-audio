@@ -199,20 +199,20 @@ SectionVerb
 EndSection
 
 SectionVerb
-        Name "HiFi Low PowerPROXY Rx"
+	Name "HiFi Low PowerPROXY Rx"
 
-        EnableSequence
-                'AFE_PCM_RX Audio Mixer MultiMedia3':1:1
-        EndSequence
+	EnableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia3':1:1
+	EndSequence
 
-        DisableSequence
-                'AFE_PCM_RX Audio Mixer MultiMedia3':1:0
-        EndSequence
+	DisableSequence
+		'AFE_PCM_RX Audio Mixer MultiMedia3':1:0
+	EndSequence
 
-        # ALSA PCMs
-        CapturePCM 0
-        PlaybackPCM 4
-        ACDBID 0:0
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 4
+	ACDBID 0:0
 
 EndSection
 
@@ -221,15 +221,20 @@ SectionDevice
 	Comment "Handset Rx device"
 
 	EnableSequence
+		'DAC1 MUX':0:RX1
 		'SLIM_0_RX Channels':0:One
 		'RX1 MIX1 INP1':0:RX1
 		'EAR PA Gain':0:POS_2_DB
 		'DAC1 Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
+		'DAC1 MUX':0:ZERO
 		'RX1 MIX1 INP1':0:ZERO
+		'EAR PA Gain':0:POS_6_DB
 		'DAC1 Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	7:1
@@ -241,20 +246,20 @@ SectionDevice
 	Comment "ANC Handset Rx device"
 
 	EnableSequence
+		'DAC1 MUX':0:RX1
 		'SLIM_0_RX Channels':0:One
 		'RX1 MIX1 INP1':0:RX1
+		'EAR PA Gain':0:POS_2_DB
 		'DAC1 Switch':1:1
-                'ANC Slot':1:1
-                'ANC1 MUX':0:DMIC1
-                'MICBIAS1 CAPLESS Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
+		'DAC1 MUX':0:ZERO
 		'RX1 MIX1 INP1':0:ZERO
+		'EAR PA Gain':0:POS_6_DB
 		'DAC1 Switch':1:0
-                'ANC Slot':1:0
-                'ANC1 MUX':0:ZERO
-                'MICBIAS1 CAPLESS Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	30:1
@@ -266,26 +271,20 @@ SectionDevice
 	Comment "Speaker Rx device"
 
 	EnableSequence
-		'SLIM_0_RX Channels':0:Two
-		'RX3 MIX1 INP1':0:RX1
-		'RX5 MIX1 INP1':0:RX2
-		'RX4 DSM MUX':0:DSM_INV
-		'RX6 DSM MUX':0:DSM_INV
-                'LINEOUT1 Volume':1:66
-                'LINEOUT2 Volume':1:66
-                'LINEOUT3 Volume':1:66
-                'LINEOUT4 Volume':1:66
+		'DAC1 MUX':0:RX1
+		'SLIM_0_RX Channels':0:One
+		'RX1 MIX1 INP1':0:RX1
+		'EAR PA Gain':0:POS_2_DB
+		'DAC1 Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
-		'RX3 MIX1 INP1':0:ZERO
-		'RX5 MIX1 INP1':0:ZERO
-		'RX4 DSM MUX':0:CIC_OUT
-		'RX6 DSM MUX':0:CIC_OUT
-                'LINEOUT1 Volume':1:0
-                'LINEOUT2 Volume':1:0
-                'LINEOUT3 Volume':1:0
-                'LINEOUT4 Volume':1:0
+		'DAC1 MUX':0:ZERO
+		'RX1 MIX1 INP1':0:ZERO
+		'EAR PA Gain':0:POS_6_DB
+		'DAC1 Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	15:1
@@ -297,22 +296,20 @@ SectionDevice
 	Comment "Headset Rx device"
 
 	EnableSequence
-		'SLIM_0_RX Channels':0:Two
+		'DAC1 MUX':0:RX1
+		'SLIM_0_RX Channels':0:One
 		'RX1 MIX1 INP1':0:RX1
-		'RX2 MIX1 INP1':0:RX2
-		'HPHL DAC Switch':1:1
-		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:80
-		'HPHR Volume':1:80
+		'EAR PA Gain':0:POS_2_DB
+		'DAC1 Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
+		'DAC1 MUX':0:ZERO
 		'RX1 MIX1 INP1':0:ZERO
-		'RX2 MIX1 INP1':0:ZERO
-		'HPHL DAC Switch':1:0
-		'HPHR DAC Switch':1:0
-		'HPHL Volume':1:0
-		'HPHR Volume':1:0
+		'EAR PA Gain':0:POS_6_DB
+		'DAC1 Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	10:1
@@ -324,38 +321,20 @@ SectionDevice
 	Comment "Speaker Headset Rx combo device"
 
 	EnableSequence
-		'SLIM_0_RX Channels':0:Two
-		'RX3 MIX1 INP1':0:RX1
-		'RX5 MIX1 INP1':0:RX2
-		'RX4 DSM MUX':0:DSM_INV
-		'RX6 DSM MUX':0:DSM_INV
-                'LINEOUT1 Volume':1:66
-                'LINEOUT2 Volume':1:66
-                'LINEOUT3 Volume':1:66
-                'LINEOUT4 Volume':1:66
+		'DAC1 MUX':0:RX1
+		'SLIM_0_RX Channels':0:One
 		'RX1 MIX1 INP1':0:RX1
-		'RX2 MIX1 INP1':0:RX2
-		'HPHL DAC Switch':1:1
-		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:80
-		'HPHR Volume':1:80
+		'EAR PA Gain':0:POS_2_DB
+		'DAC1 Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
-		'RX3 MIX1 INP1':0:ZERO
-		'RX5 MIX1 INP1':0:ZERO
-		'RX4 DSM MUX':0:CIC_OUT
-		'RX6 DSM MUX':0:CIC_OUT
-                'LINEOUT1 Volume':1:0
-                'LINEOUT2 Volume':1:0
-                'LINEOUT3 Volume':1:0
-                'LINEOUT4 Volume':1:0
+		'DAC1 MUX':0:ZERO
 		'RX1 MIX1 INP1':0:ZERO
-		'RX2 MIX1 INP1':0:ZERO
-		'HPHL DAC Switch':1:0
-		'HPHR DAC Switch':1:0
-		'HPHL Volume':1:0
-		'HPHR Volume':1:0
+		'EAR PA Gain':0:POS_6_DB
+		'DAC1 Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	10:1
@@ -367,54 +346,20 @@ SectionDevice
 	Comment "Speaker ANC Headset Rx combo device"
 
 	EnableSequence
-		'SLIM_0_RX Channels':0:Two
-		'RX3 MIX1 INP1':0:RX1
-		'RX5 MIX1 INP1':0:RX2
-		'RX4 DSM MUX':0:DSM_INV
-		'RX6 DSM MUX':0:DSM_INV
-                'LINEOUT1 Volume':1:66
-                'LINEOUT2 Volume':1:66
-                'LINEOUT3 Volume':1:66
-                'LINEOUT4 Volume':1:66
+		'DAC1 MUX':0:RX1
+		'SLIM_0_RX Channels':0:One
 		'RX1 MIX1 INP1':0:RX1
-		'RX2 MIX1 INP1':0:RX2
-		'HPHL DAC Switch':1:1
-		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:80
-		'HPHR Volume':1:80
-		'ANC1 MUX':0:ADC4
-		'ANC2 MUX':0:ADC4
-		'ANC2 MUX':0:ADC3
-		'ANC3 Volume':1:100
-		'ANC4 Volume':1:100
-		'MICBIAS3 CAPLESS Switch':1:1
-		'MICBIAS1 CAPLESS Switch':1:1
-		'MICBIAS4 CAPLESS Switch':1:1
+		'EAR PA Gain':0:POS_2_DB
+		'DAC1 Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
-		'RX3 MIX1 INP1':0:ZERO
-		'RX5 MIX1 INP1':0:ZERO
-		'RX4 DSM MUX':0:CIC_OUT
-		'RX6 DSM MUX':0:CIC_OUT
-                'LINEOUT1 Volume':1:0
-                'LINEOUT2 Volume':1:0
-                'LINEOUT3 Volume':1:0
-                'LINEOUT4 Volume':1:0
+		'DAC1 MUX':0:ZERO
 		'RX1 MIX1 INP1':0:ZERO
-		'RX2 MIX1 INP1':0:ZERO
-		'HPHL DAC Switch':1:0
-		'HPHR DAC Switch':1:0
-		'HPHL Volume':1:0
-		'HPHR Volume':1:0
-		'ANC1 MUX':0:ZERO
-		'ANC2 MUX':0:ZERO
-		'ANC2 MUX':0:ZERO
-		'ANC3 Volume':1:0
-		'ANC4 Volume':1:0
-		'MICBIAS3 CAPLESS Switch':1:0
-		'MICBIAS1 CAPLESS Switch':1:0
-		'MICBIAS4 CAPLESS Switch':1:0
+		'EAR PA Gain':0:POS_6_DB
+		'DAC1 Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	26:1
@@ -426,38 +371,20 @@ SectionDevice
 	Comment "ANC Headset Rx device"
 
 	EnableSequence
-		'SLIM_0_RX Channels':0:Two
+		'DAC1 MUX':0:RX1
+		'SLIM_0_RX Channels':0:One
 		'RX1 MIX1 INP1':0:RX1
-		'RX2 MIX1 INP1':0:RX2
-		'HPHL DAC Switch':1:1
-		'HPHR DAC Switch':1:1
-		'HPHL Volume':1:80
-		'HPHR Volume':1:80
-		'ANC1 MUX':0:ADC4
-		'ANC2 MUX':0:ADC4
-		'ANC2 MUX':0:ADC3
-		'ANC3 Volume':1:100
-		'ANC4 Volume':1:100
-		'MICBIAS3 CAPLESS Switch':1:1
-		'MICBIAS1 CAPLESS Switch':1:1
-		'MICBIAS4 CAPLESS Switch':1:1
+		'EAR PA Gain':0:POS_2_DB
+		'DAC1 Switch':1:1
+		'RX1 Digital Volume':1:66
 	EndSequence
 
 	DisableSequence
+		'DAC1 MUX':0:ZERO
 		'RX1 MIX1 INP1':0:ZERO
-		'RX2 MIX1 INP1':0:ZERO
-		'HPHL DAC Switch':1:0
-		'HPHR DAC Switch':1:0
-		'HPHL Volume':1:0
-		'HPHR Volume':1:0
-		'ANC1 MUX':0:ZERO
-		'ANC2 MUX':0:ZERO
-		'ANC2 MUX':0:ZERO
-		'ANC3 Volume':1:0
-		'ANC4 Volume':1:0
-		'MICBIAS3 CAPLESS Switch':1:0
-		'MICBIAS1 CAPLESS Switch':1:0
-		'MICBIAS4 CAPLESS Switch':1:0
+		'EAR PA Gain':0:POS_6_DB
+		'DAC1 Switch':1:0
+		'RX1 Digital Volume':1:0
 	EndSequence
 
 	ACDBID	26:1
@@ -474,10 +401,10 @@ SectionDevice
 		'RX5 MIX1 INP1':0:RX2
 		'RX4 DSM MUX':0:DSM_INV
 		'RX6 DSM MUX':0:DSM_INV
-                'LINEOUT1 Volume':1:66
-                'LINEOUT2 Volume':1:66
-                'LINEOUT3 Volume':1:66
-                'LINEOUT4 Volume':1:66
+		'LINEOUT1 Volume':1:100
+		'LINEOUT2 Volume':1:100
+		'LINEOUT3 Volume':1:100
+		'LINEOUT4 Volume':1:100
 	EndSequence
 
 	DisableSequence
@@ -485,10 +412,10 @@ SectionDevice
 		'RX5 MIX1 INP1':0:ZERO
 		'RX4 DSM MUX':0:CIC_OUT
 		'RX6 DSM MUX':0:CIC_OUT
-                'LINEOUT1 Volume':1:0
-                'LINEOUT2 Volume':1:0
-                'LINEOUT3 Volume':1:0
-                'LINEOUT4 Volume':1:0
+		'LINEOUT1 Volume':1:0
+		'LINEOUT2 Volume':1:0
+		'LINEOUT3 Volume':1:0
+		'LINEOUT4 Volume':1:0
 	EndSequence
 
 	ACDBID	15:1
@@ -583,37 +510,37 @@ EndSection
 
 SectionDevice
 
-        Name "QMIC"
-        Comment "Quad mic device"
+	Name "QMIC"
+	Comment "Quad mic device"
 
-        EnableSequence
-                'SLIM_0_TX Channels':0:Four
-                'SLIM TX7 MUX':0:DEC1
-                'DEC1 MUX':0:DMIC1
-                'SLIM TX8 MUX':0:DEC2
-                'DEC2 MUX':0:DMIC2
-                'SLIM TX9 MUX':0:DEC3
-                'DEC3 MUX':0:DMIC3
-                'SLIM TX10 MUX':0:DEC4
-                'DEC4 MUX':0:DMIC4
-                'MICBIAS1 CAPLESS Switch':1:1
-                'MICBIAS3 CAPLESS Switch':1:1
-        EndSequence
+	EnableSequence
+		'SLIM_0_TX Channels':0:Four
+		'SLIM TX7 MUX':0:DEC1
+		'DEC1 MUX':0:DMIC1
+		'SLIM TX8 MUX':0:DEC2
+		'DEC2 MUX':0:DMIC2
+		'SLIM TX9 MUX':0:DEC3
+		'DEC3 MUX':0:DMIC3
+		'SLIM TX10 MUX':0:DEC4
+		'DEC4 MUX':0:DMIC4
+		'MICBIAS1 CAPLESS Switch':1:1
+		'MICBIAS3 CAPLESS Switch':1:1
+	EndSequence
 
-        DisableSequence
-                'SLIM TX7 MUX':0:ZERO
-                'DEC1 MUX':0:ZERO
-                'SLIM TX8 MUX':0:ZERO
-                'DEC2 MUX':0:ZERO
-                'SLIM TX9 MUX':0:ZERO
-                'DEC3 MUX':0:ZERO
-                'SLIM TX10 MUX':0:ZERO
-                'DEC4 MUX':0:ZERO
-                'MICBIAS1 CAPLESS Switch':1:0
-                'MICBIAS3 CAPLESS Switch':1:0
-        EndSequence
+	DisableSequence
+		'SLIM TX7 MUX':0:ZERO
+		'DEC1 MUX':0:ZERO
+		'SLIM TX8 MUX':0:ZERO
+		'DEC2 MUX':0:ZERO
+		'SLIM TX9 MUX':0:ZERO
+		'DEC3 MUX':0:ZERO
+		'SLIM TX10 MUX':0:ZERO
+		'DEC4 MUX':0:ZERO
+		'MICBIAS1 CAPLESS Switch':1:0
+		'MICBIAS3 CAPLESS Switch':1:0
+	EndSequence
 
-        ACDBID  19:2
+	ACDBID  19:2
 
 EndSection
 
@@ -909,16 +836,16 @@ SectionDevice
 EndSection
 
 SectionDevice
-        Name "PROXY Rx"
-        Comment "PROXY Rx device"
+	Name "PROXY Rx"
+	Comment "PROXY Rx device"
 
-        EnableSequence
-        EndSequence
+	EnableSequence
+	EndSequence
 
-        DisableSequence
-        EndSequence
+	DisableSequence
+	EndSequence
 
-        ACDBID  0:0
+	ACDBID  0:0
 
 EndSection
 
@@ -1200,20 +1127,20 @@ SectionModifier
 EndSection
 
 SectionModifier
-        Name "Play MusicPROXY Rx"
+	Name "Play MusicPROXY Rx"
 
-        EnableSequence
+	EnableSequence
 		'AFE_PCM_RX Audio Mixer MultiMedia1':1:1
-        EndSequence
+	EndSequence
 
-        DisableSequence
+	DisableSequence
 		'AFE_PCM_RX Audio Mixer MultiMedia1':1:0
-        EndSequence
+	EndSequence
 
-        # ALSA PCMs
-        CapturePCM 0
-        PlaybackPCM 0
-        ACDBID 0:0
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
 
 EndSection
 
@@ -1645,19 +1572,19 @@ SectionModifier
 EndSection
 
 SectionModifier
-        Name "Play LPAPROXY Rx"
+	Name "Play LPAPROXY Rx"
 
-        EnableSequence
+	EnableSequence
 		'AFE_PCM_RX Audio Mixer MultiMedia3':1:1
-        EndSequence
+	EndSequence
 
-        DisableSequence
+	DisableSequence
 		'AFE_PCM_RX Audio Mixer MultiMedia3':1:0
-        EndSequence
+	EndSequence
 
-        # ALSA PCMs
-        PlaybackPCM 4
-        ACDBID 0:0
+	# ALSA PCMs
+	PlaybackPCM 4
+	ACDBID 0:0
 
 EndSection
 
@@ -1798,20 +1725,20 @@ SectionModifier
 EndSection
 
 SectionModifier
-        Name "Capture MusicQMIC"
+	Name "Capture MusicQMIC"
 
-        EnableSequence
-                'MultiMedia1 Mixer SLIM_0_TX':1:1
-        EndSequence
+	EnableSequence
+		'MultiMedia1 Mixer SLIM_0_TX':1:1
+	EndSequence
 
-        DisableSequence
-                'MultiMedia1 Mixer SLIM_0_TX':1:0
-        EndSequence
+	DisableSequence
+		'MultiMedia1 Mixer SLIM_0_TX':1:0
+	EndSequence
 
-        # ALSA PCMs
-        CapturePCM 0
-        PlaybackPCM 0
-        ACDBID 0:0
+	# ALSA PCMs
+	CapturePCM 0
+	PlaybackPCM 0
+	ACDBID 0:0
 
 EndSection
 
@@ -2264,7 +2191,7 @@ SectionModifier
 	EndSequence
 
 	DisableSequence
-                'Internal BTSCO SampleRate':0:8000
+		'Internal BTSCO SampleRate':0:8000
 		'INTERNAL_BT_SCO_RX_Voice Mixer CSVoice':1:0
 		'Voice_Tx Mixer INTERNAL_BT_SCO_TX_Voice':1:0
 	EndSequence
@@ -2280,7 +2207,7 @@ SectionModifier
 	Name "Play VoiceBT SCO Tx"
 
 	EnableSequence
-                'Internal BTSCO SampleRate':0:8000
+		'Internal BTSCO SampleRate':0:8000
 		'INTERNAL_BT_SCO_RX_Voice Mixer CSVoice':1:1
 		'Voice_Tx Mixer INTERNAL_BT_SCO_TX_Voice':1:1
 	EndSequence
@@ -2302,7 +2229,7 @@ SectionModifier
 	EndSequence
 
 	DisableSequence
-                'Internal BTSCO SampleRate':0:8000
+		'Internal BTSCO SampleRate':0:8000
 		'INTERNAL_BT_SCO_RX_Voice Mixer CSVoice':1:0
 		'Voice_Tx Mixer INTERNAL_BT_SCO_TX_Voice':1:0
 	EndSequence
@@ -2318,7 +2245,7 @@ SectionModifier
 	Name "Play VoiceBT SCO WB Tx"
 
 	EnableSequence
-                'Internal BTSCO SampleRate':0:16000
+		'Internal BTSCO SampleRate':0:16000
 		'INTERNAL_BT_SCO_RX_Voice Mixer CSVoice':1:1
 		'Voice_Tx Mixer INTERNAL_BT_SCO_TX_Voice':1:1
 	EndSequence
@@ -2352,7 +2279,7 @@ EndSection
 SectionModifier
 	Name "Play VOIP"
 
-        # ALSA PCMs
+	# ALSA PCMs
 	PlaybackPCM 3
 	capturePCM 3
 	ACDBID 0:0
@@ -2528,9 +2455,9 @@ SectionModifier
 	EndSequence
 
 	DisableSequence
-                'Internal BTSCO SampleRate':0:8000
-                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:0
-                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:0
+		'Internal BTSCO SampleRate':0:8000
+		'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:0
+		'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:0
 	EndSequence
 
 	# ALSA PCMs
@@ -2544,9 +2471,9 @@ SectionModifier
 	Name "Play VOIPBT SCO Tx"
 
 	EnableSequence
-                'Internal BTSCO SampleRate':1:8000
-                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:1
-                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:1
+		'Internal BTSCO SampleRate':1:8000
+		'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:1
+		'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:1
 	EndSequence
 
 	DisableSequence
@@ -2560,40 +2487,40 @@ SectionModifier
 EndSection
 
 SectionModifier
-        Name "Play VOIPBT SCO WB Rx"
+	Name "Play VOIPBT SCO WB Rx"
 
-        EnableSequence
-        EndSequence
+	EnableSequence
+	EndSequence
 
-        DisableSequence
-                'Internal BTSCO SampleRate':0:8000
-                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:0
-                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:0
-        EndSequence
+	DisableSequence
+		'Internal BTSCO SampleRate':0:8000
+		'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:0
+		'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:0
+	EndSequence
 
-        # ALSA PCMs
-        PlaybackPCM 3
-        capturePCM 3
-        ACDBID 0:0
+	# ALSA PCMs
+	PlaybackPCM 3
+	capturePCM 3
+	ACDBID 0:0
 
 EndSection
 
 SectionModifier
-        Name "Play VOIPBT SCO WB Tx"
+	Name "Play VOIPBT SCO WB Tx"
 
-        EnableSequence
-                'Internal BTSCO SampleRate':1:16000
-                'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:1
-                'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:1
-        EndSequence
+	EnableSequence
+		'Internal BTSCO SampleRate':1:16000
+		'INTERNAL_BT_SCO_RX_Voice Mixer Voip':1:1
+		'Voip_Tx Mixer INTERNAL_BT_SCO_TX_Voip':1:1
+	EndSequence
 
-        DisableSequence
-        EndSequence
+	DisableSequence
+	EndSequence
 
-        # ALSA PCMs
-        PlaybackPCM 3
-        capturePCM 3
-        ACDBID 0:0
+	# ALSA PCMs
+	PlaybackPCM 3
+	capturePCM 3
+	ACDBID 0:0
 
 EndSection
 
@@ -2652,57 +2579,57 @@ SectionModifier
 EndSection
 
 SectionModifier
-        Name "Play VOIPQMIC"
+	Name "Play VOIPQMIC"
 
-        EnableSequence
-                'SLIM_0_RX_Voice Mixer Voip':1:1
-                'Voip_Tx Mixer SLIM_0_TX_Voip':1:1
-        EndSequence
+	EnableSequence
+		'SLIM_0_RX_Voice Mixer Voip':1:1
+		'Voip_Tx Mixer SLIM_0_TX_Voip':1:1
+	EndSequence
 
-        DisableSequence
-        EndSequence
+	DisableSequence
+	EndSequence
 
-        # ALSA PCMs
-        PlaybackPCM 3
-        capturePCM 3
-        ACDBID 0:0
+	# ALSA PCMs
+	PlaybackPCM 3
+	capturePCM 3
+	ACDBID 0:0
 
 EndSection
 
 SectionModifier
-        Name "Capture Voice Downlink"
+	Name "Capture Voice Downlink"
 
-        EnableSequence
-                'MultiMedia1 Mixer VOC_REC_DL':1:1
-        EndSequence
+	EnableSequence
+		'MultiMedia1 Mixer VOC_REC_DL':1:1
+	EndSequence
 
-        DisableSequence
-                'MultiMedia1 Mixer VOC_REC_DL':1:0
-        EndSequence
+	DisableSequence
+		'MultiMedia1 Mixer VOC_REC_DL':1:0
+	EndSequence
 
-        # ALSA PCMs
-        PlaybackPCM 0
-        capturePCM 0
-        ACDBID 0:0
+	# ALSA PCMs
+	PlaybackPCM 0
+	capturePCM 0
+	ACDBID 0:0
 
 EndSection
 
 SectionModifie
-        Name "Capture Voice Uplink Downlink"
+	Name "Capture Voice Uplink Downlink"
 
-        EnableSequence
-                'MultiMedia1 Mixer VOC_REC_UL':1:1
-                'MultiMedia1 Mixer VOC_REC_DL':1:1
-        EndSequence
+	EnableSequence
+		'MultiMedia1 Mixer VOC_REC_UL':1:1
+		'MultiMedia1 Mixer VOC_REC_DL':1:1
+	EndSequence
 
-        DisableSequence
-                'MultiMedia1 Mixer VOC_REC_UL':1:0
-                'MultiMedia1 Mixer VOC_REC_DL':1:0
-        EndSequence
+	DisableSequence
+		'MultiMedia1 Mixer VOC_REC_UL':1:0
+		'MultiMedia1 Mixer VOC_REC_DL':1:0
+	EndSequence
 
-        # ALSA PCMs
-        PlaybackPCM 0
-        capturePCM 0
-        ACDBID 0:0
+	# ALSA PCMs
+	PlaybackPCM 0
+	capturePCM 0
+	ACDBID 0:0
 
 EndSection
