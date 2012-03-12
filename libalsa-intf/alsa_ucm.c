@@ -629,7 +629,7 @@ static int snd_use_case_ident_set_controls_for_all_devices(snd_use_case_mgr_t *u
             strlcpy(use_case, ident, sizeof(use_case));
             strlcat(use_case, current_device, sizeof(use_case));
             LOGV("Applying mixer controls for use case: %s", use_case);
-            if ((ret = get_use_case_index(uc_mgr, use_case)) < 0) {
+            if ((get_use_case_index(uc_mgr, use_case)) < 0) {
                 LOGV("No valid use case found: %s", use_case);
             } else {
                 if (enable) {
@@ -662,7 +662,7 @@ static int snd_use_case_set_device_for_all_ident(snd_use_case_mgr_t *uc_mgr,
     if (strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_INACTIVE, MAX_STR_LEN)) {
         strlcpy(use_case, uc_mgr->card_ctxt_ptr->current_verb, sizeof(use_case));
         strlcat(use_case, device, sizeof(use_case));
-        if ((ret = get_use_case_index(uc_mgr, use_case)) < 0) {
+        if ((get_use_case_index(uc_mgr, use_case)) < 0) {
             LOGV("No valid use case found: %s", use_case);
         } else {
             if (enable) {
@@ -684,7 +684,7 @@ static int snd_use_case_set_device_for_all_ident(snd_use_case_mgr_t *uc_mgr,
         ident_value = snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->mod_list_head, index);
         strlcpy(use_case, ident_value, sizeof(use_case));
         strlcat(use_case, device, sizeof(use_case));
-        if ((ret = get_use_case_index(uc_mgr, use_case)) < 0) {
+        if ((get_use_case_index(uc_mgr, use_case)) < 0) {
             LOGV("No valid use case found: %s", use_case);
         } else {
             if (enable && !flag) {
@@ -871,7 +871,7 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
         for (index = 0; index < list_size; index++) {
             ident1 = snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->dev_list_head, index);
             if (!strncmp(ident1, value, MAX_STR_LEN)) {
-                LOGV("Device already part of enabled list: %s", value);
+                LOGV("Ignoring %s device enable, it is already part of enabled list", value);
                 free(ident1);
                 break;
             }
@@ -880,10 +880,10 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
         if (index == list_size) {
             LOGV("enadev: device value to be enabled: %s", value);
             snd_ucm_add_ident_to_list(&uc_mgr->card_ctxt_ptr->dev_list_head, value);
+            snd_ucm_print_list(uc_mgr->card_ctxt_ptr->dev_list_head);
+            /* Apply Mixer controls of all verb and modifiers for this device*/
+            ret = snd_use_case_set_device_for_all_ident(uc_mgr, value, 1);
         }
-        snd_ucm_print_list(uc_mgr->card_ctxt_ptr->dev_list_head);
-        /* Apply Mixer controls of all verb and modifiers for this device*/
-        ret = snd_use_case_set_device_for_all_ident(uc_mgr, value, 1);
     } else if (!strncmp(identifier, "_disdev", 7)) {
         ret = snd_ucm_get_status_at_index(uc_mgr->card_ctxt_ptr->dev_list_head, value);
         if ((ret < 0) || (ret == 0)) {
@@ -904,23 +904,10 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
             }
         }
     } else if (!strncmp(identifier, "_enamod", 7)) {
-        if (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_USE_CASE_VERB_INACTIVE, MAX_STR_LEN)) {
-            LOGE("Invalid use case verb value");
-            ret = -EINVAL;
-        } else {
-            ret = 0;
-            while(strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], uc_mgr->card_ctxt_ptr->current_verb, MAX_STR_LEN)) {
-                if (!strncmp(uc_mgr->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST, MAX_STR_LEN)){
-                    ret = -EINVAL;
-                    break;
-                }
-                index++;
-            }
-        }
-        if (ret < 0) {
+        verb_index =  uc_mgr->card_ctxt_ptr->current_verb_index; index = 0; ret = 0;
+        if (verb_index < 0) {
             LOGE("Invalid verb identifier value");
         } else {
-            verb_index = index; index = 0; ret = 0;
             LOGV("Index:%d Verb:%s", verb_index, uc_mgr->card_ctxt_ptr->verb_list[verb_index]);
             while(strncmp(uc_mgr->card_ctxt_ptr->use_case_verb_list[verb_index].modifier_list[index],
                 value, MAX_STR_LEN)) {
