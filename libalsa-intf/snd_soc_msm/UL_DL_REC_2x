@@ -2150,7 +2150,7 @@ SectionModifier
 
 EndSection
 
-SectionVerb
+SectionModifier
 	Name "Play VOIPHeadphones"
 
 	EnableSequence
