@@ -40,8 +40,11 @@
 #define check_range(val, min, max) \
         (((val < min) ? (min) : (val > max) ? (max) : (val)))
 
-#define convert_prange1(val, min, max) \
-        ceil((val) * ((max) - (min)) * 0.01 + (min))
+/* .5 for rounding before casting to non-decmal value */
+/* Should not be used if you need decmal values */
+/* or are expecting negitive indexes */
+#define percent_to_index(val, min, max) \
+        ((val) * ((max) - (min)) * 0.01 + (min) + .5)
 
 #define DEFAULT_TLV_SIZE 4096
 
@@ -437,31 +440,25 @@ void mixer_ctl_get(struct mixer_ctl *ctl, unsigned *value)
 static long scale_int(struct snd_ctl_elem_info *ei, unsigned _percent)
 {
     long percent;
-    long range;
 
     if (_percent > 100)
         percent = 100;
     else
         percent = (long) _percent;
 
-    range = (ei->value.integer.max - ei->value.integer.min);
-
-    return ei->value.integer.min + (range * percent) / 100LL;
+    return (long)percent_to_index(percent, ei->value.integer.min, ei->value.integer.max);
 }
 
 static long long scale_int64(struct snd_ctl_elem_info *ei, unsigned _percent)
 {
     long long percent;
-    long long range;
 
     if (_percent > 100)
         percent = 100;
     else
         percent = (long) _percent;
 
-    range = (ei->value.integer.max - ei->value.integer.min) * 100LL;
-
-    return ei->value.integer.min + (range / percent);
+    return (long long)percent_to_index(percent, ei->value.integer.min, ei->value.integer.max);
 }
 
 /*
@@ -545,7 +542,7 @@ int mixer_ctl_set(struct mixer_ctl *ctl, unsigned percent)
                 volume = 1;
                 break;
             default:
-                percent = (long)convert_prange1(percent, min, max);
+                percent = (long)percent_to_index(percent, min, max);
                 percent = check_range(percent, min, max);
                 volume = 1;
                 break;
@@ -616,7 +613,7 @@ static int set_volume_simple(struct mixer_ctl *ctl,
         strtol(p, &p, 10);
     }
     if (*p == '%') {
-        val = (long)convert_prange1(strtod(s, NULL), pmin, pmax);
+        val = (long)percent_to_index(strtod(s, NULL), pmin, pmax);
         p++;
     } else if (p[0] == 'd' && p[1] == 'B') {
         val = (long)(strtod(s, NULL) * 100.0);
