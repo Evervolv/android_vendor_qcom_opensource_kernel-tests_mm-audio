@@ -811,7 +811,7 @@ SectionDevice
 	Comment "TTY Full Tx device"
 
 	EnableSequence
-		'SLIM_0_RX Channels':0:One
+		'SLIM_0_TX Channels':0:One
 		'SLIM TX7 MUX':0:DEC5
 		'DEC5 MUX':0:ADC2
 		'ADC2 Volume':1:100
