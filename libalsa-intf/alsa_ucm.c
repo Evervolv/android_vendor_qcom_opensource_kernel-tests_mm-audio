@@ -909,9 +909,9 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
             LOGV("enadev: device value to be enabled: %s", value);
             snd_ucm_add_ident_to_list(&uc_mgr->card_ctxt_ptr->dev_list_head, value);
             snd_ucm_print_list(uc_mgr->card_ctxt_ptr->dev_list_head);
-            /* Apply Mixer controls of all verb and modifiers for this device*/
-            ret = snd_use_case_set_device_for_all_ident(uc_mgr, value, 1);
         }
+        /* Apply Mixer controls of all verb and modifiers for this device*/
+        ret = snd_use_case_set_device_for_all_ident(uc_mgr, value, 1);
     } else if (!strncmp(identifier, "_disdev", 7)) {
         ret = snd_ucm_get_status_at_index(uc_mgr->card_ctxt_ptr->dev_list_head, value);
         if ((ret < 0) || (ret == 0)) {
