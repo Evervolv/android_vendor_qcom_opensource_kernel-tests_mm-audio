@@ -244,7 +244,7 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
                      const char *identifier,
                      const char **value)
 {
-    char ident[MAX_STR_LEN], *ident1, *ident2;
+    char ident[MAX_STR_LEN], *ident1, *ident2, *temp_ptr;
     int index, verb_index = 0, ret = 0;
 
     pthread_mutex_lock(&uc_mgr->card_ctxt_ptr->card_lock);
@@ -276,12 +276,12 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
     }
 
     strlcpy(ident, identifier, sizeof(ident));
-    if(!(ident1 = strtok(ident, "/"))) {
+    if(!(ident1 = strtok_r(ident, "/", &temp_ptr))) {
         LOGE("No valid identifier found: %s", ident);
         ret = -EINVAL;
     } else {
         if ((!strncmp(ident1, "PlaybackPCM", 11)) || (!strncmp(ident1, "CapturePCM", 10))) {
-            ident2 = strtok(NULL, "/");
+            ident2 = strtok_r(NULL, "/", &temp_ptr);
             index = 0;
             verb_index = uc_mgr->card_ctxt_ptr->current_verb_index;
             if((verb_index < 0) || (!strncmp(uc_mgr->card_ctxt_ptr->current_verb, SND_UCM_END_OF_LIST, 3)) ||
@@ -353,7 +353,7 @@ int snd_use_case_geti(snd_use_case_mgr_t *uc_mgr,
               const char *identifier,
               long *value)
 {
-    char ident[MAX_STR_LEN], *ident1, *ident2, *ident_value;
+    char ident[MAX_STR_LEN], *ident1, *ident2, *ident_value, *temp_ptr;
     int index, list_size, ret = -EINVAL;
 
     pthread_mutex_lock(&uc_mgr->card_ctxt_ptr->card_lock);
@@ -366,12 +366,12 @@ int snd_use_case_geti(snd_use_case_mgr_t *uc_mgr,
 
     *value = 0;
     strlcpy(ident, identifier, sizeof(ident));
-    if(!(ident1 = strtok(ident, "/"))) {
+    if(!(ident1 = strtok_r(ident, "/", &temp_ptr))) {
         LOGE("No valid identifier found: %s", ident);
         ret = -EINVAL;
     } else {
         if (!strncmp(ident1, "_devstatus", 10)) {
-            ident2 = strtok(NULL, "/");
+            ident2 = strtok_r(NULL, "/", &temp_ptr);
             list_size = snd_ucm_get_size_of_list(uc_mgr->card_ctxt_ptr->dev_list_head);
             for (index = 0; index < list_size; index++) {
                 ident_value = snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->dev_list_head, index);
@@ -387,7 +387,7 @@ int snd_use_case_geti(snd_use_case_mgr_t *uc_mgr,
             }
             ret = 0;
         } else if (!strncmp(ident1, "_modstatus", 10)) {
-            ident2 = strtok(NULL, "/");
+            ident2 = strtok_r(NULL, "/", &temp_ptr);
             list_size = snd_ucm_get_size_of_list(uc_mgr->card_ctxt_ptr->mod_list_head);
             for (index = 0; index < list_size; index++) {
                 ident_value = snd_ucm_get_value_at_index(uc_mgr->card_ctxt_ptr->mod_list_head, index);
@@ -804,7 +804,7 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
                      const char *identifier,
                      const char *value)
 {
-    char ident[MAX_STR_LEN], *ident1, *ident2;
+    char ident[MAX_STR_LEN], *ident1, *ident2, *temp_ptr;
     int verb_index, list_size, index = 0, ret = -EINVAL;
 
     pthread_mutex_lock(&uc_mgr->card_ctxt_ptr->card_lock);
@@ -818,12 +818,12 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
 
     LOGD("snd_use_case_set(): uc_mgr %p identifier %s value %s", uc_mgr, identifier, value);
     strlcpy(ident, identifier, sizeof(ident));
-    if(!(ident1 = strtok(ident, "/"))) {
+    if(!(ident1 = strtok_r(ident, "/", &temp_ptr))) {
         LOGV("No multiple identifiers found in identifier value");
         ident[0] = 0;
     } else {
         if (!strncmp(ident1, "_swdev", 6)) {
-            if(!(ident2 = strtok(NULL, "/"))) {
+            if(!(ident2 = strtok_r(NULL, "/", &temp_ptr))) {
                 LOGD("Invalid disable device value: %s, but enabling new device", ident2);
             } else {
                 ret = snd_ucm_del_ident_from_list(&uc_mgr->card_ctxt_ptr->dev_list_head, ident2);
@@ -846,7 +846,7 @@ int snd_use_case_set(snd_use_case_mgr_t *uc_mgr,
             return ret;
         } else if (!strncmp(ident1, "_swmod", 6)) {
             pthread_mutex_unlock(&uc_mgr->card_ctxt_ptr->card_lock);
-            if(!(ident2 = strtok(NULL, "/"))) {
+            if(!(ident2 = strtok_r(NULL, "/", &temp_ptr))) {
                 LOGD("Invalid modifier value: %s, but enabling new modifier", ident2);
             } else {
                 ret = snd_use_case_set(uc_mgr, "_dismod", ident2);
@@ -1034,8 +1034,8 @@ int snd_use_case_mgr_open(snd_use_case_mgr_t **uc_mgr, const char *card_name)
             return -ENOMEM;
         }
         strlcpy(uc_mgr_ptr->card_ctxt_ptr->control_device, "/dev/snd/controlC", 18);
-        sprintf(tmp, "%d", uc_mgr_ptr->card_ctxt_ptr->card_number);
-        strncat(uc_mgr_ptr->card_ctxt_ptr->control_device, tmp, strlen(tmp));
+        snprintf(tmp, sizeof(tmp), "%d", uc_mgr_ptr->card_ctxt_ptr->card_number);
+        strlcat(uc_mgr_ptr->card_ctxt_ptr->control_device, tmp, (strlen("/dev/snd/controlC")+2)*sizeof(char));
         uc_mgr_ptr->device_list_count = 0;
         uc_mgr_ptr->modifier_list_count = 0;
         uc_mgr_ptr->current_device_list = NULL;
@@ -1196,7 +1196,7 @@ void *second_stage_parsing_thread(void *uc_mgr_ptr)
     char path[200];
     struct stat st;
     int fd, index = 0, ret = 0, rc = 0;
-    char *read_buf, *next_str, *current_str, *buf, *p, *verb_name, *file_name = NULL;
+    char *read_buf, *next_str, *current_str, *buf, *p, *verb_name, *file_name = NULL, *temp_ptr;
     snd_use_case_mgr_t **uc_mgr = (snd_use_case_mgr_t **)&uc_mgr_ptr;
 
     strlcpy(path, CONFIG_DIR, (strlen(CONFIG_DIR)+1));
@@ -1243,9 +1243,9 @@ void *second_stage_parsing_thread(void *uc_mgr_ptr)
                 else
                     continue;
             }
-            p = strtok(buf, ".");
+            p = strtok_r(buf, ".", &temp_ptr);
             while (p != NULL) {
-                p = strtok(NULL, "\"");
+                p = strtok_r(NULL, "\"", &temp_ptr);
                 if (p == NULL)
                     break;
                 verb_name = (char *)malloc((strlen(p)+1)*sizeof(char));
@@ -1264,9 +1264,9 @@ void *second_stage_parsing_thread(void *uc_mgr_ptr)
                 else
                     continue;
             }
-            p = strtok(buf, "\"");
+            p = strtok_r(buf, "\"", &temp_ptr);
             while (p != NULL) {
-                p = strtok(NULL, "\"");
+                p = strtok_r(NULL, "\"", &temp_ptr);
                 if (p == NULL)
                     break;
                 file_name = (char *)malloc((strlen(p)+1)*sizeof(char));
@@ -1279,6 +1279,7 @@ void *second_stage_parsing_thread(void *uc_mgr_ptr)
             }
             if (file_name != NULL) {
                 ret = snd_ucm_parse_verb(uc_mgr, file_name, index);
+                pthread_mutex_lock(&(*uc_mgr)->card_ctxt_ptr->card_lock);
                 (*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_name =
                     (char *)malloc((strlen(verb_name)+1)*sizeof(char));
                 strlcpy((*uc_mgr)->card_ctxt_ptr->use_case_verb_list[index].use_case_name,
@@ -1294,16 +1295,25 @@ void *second_stage_parsing_thread(void *uc_mgr_ptr)
                 (*uc_mgr)->card_ctxt_ptr->verb_list[index] =
                     (char *)malloc((strlen(verb_name)+1)*sizeof(char));
                 strlcpy((*uc_mgr)->card_ctxt_ptr->verb_list[index], verb_name, ((strlen(verb_name)+1)*sizeof(char)));
+                index++;
+                (*uc_mgr)->card_ctxt_ptr->verb_list[index] =
+                    (char *)malloc((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char));
+                strlcpy((*uc_mgr)->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST,
+                       ((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char)));
+                pthread_mutex_unlock(&(*uc_mgr)->card_ctxt_ptr->card_lock);
                 free(verb_name);
                 verb_name = NULL;
                 free(file_name);
                 file_name = NULL;
+            } else {
+                pthread_mutex_lock(&(*uc_mgr)->card_ctxt_ptr->card_lock);
+                index++;
+                (*uc_mgr)->card_ctxt_ptr->verb_list[index] =
+                    (char *)malloc((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char));
+                strlcpy((*uc_mgr)->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST,
+                        ((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char)));
+                pthread_mutex_unlock(&(*uc_mgr)->card_ctxt_ptr->card_lock);
             }
-            index++;
-            (*uc_mgr)->card_ctxt_ptr->verb_list[index] =
-                (char *)malloc((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char));
-            strlcpy((*uc_mgr)->card_ctxt_ptr->verb_list[index], SND_UCM_END_OF_LIST,
-                    ((strlen(SND_UCM_END_OF_LIST)+1)*sizeof(char)));
         }
         if((current_str = next_str) == NULL)
             break;
@@ -1329,7 +1339,7 @@ static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr)
 {
     struct stat st;
     int fd, verb_count, index = 0, ret = 0, rc;
-    char *read_buf, *next_str, *current_str, *buf, *p, *verb_name, *file_name = NULL;
+    char *read_buf, *next_str, *current_str, *buf, *p, *verb_name, *file_name = NULL, *temp_ptr;
     char path[200];
 
     strlcpy(path, CONFIG_DIR, (strlen(CONFIG_DIR)+1));
@@ -1372,9 +1382,9 @@ static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr)
                 else
                     continue;
             }
-            p = strtok(buf, ".");
+            p = strtok_r(buf, ".", &temp_ptr);
             while (p != NULL) {
-                p = strtok(NULL, "\"");
+                p = strtok_r(NULL, "\"", &temp_ptr);
                 if (p == NULL)
                     break;
                 verb_name = (char *)malloc((strlen(p)+1)*sizeof(char));
@@ -1401,9 +1411,9 @@ static int snd_ucm_parse(snd_use_case_mgr_t **uc_mgr)
                 else
                     continue;
             }
-            p = strtok(buf, "\"");
+            p = strtok_r(buf, "\"", &temp_ptr);
             while (p != NULL) {
-                p = strtok(NULL, "\"");
+                p = strtok_r(NULL, "\"", &temp_ptr);
                 if (p == NULL)
                     break;
                 file_name = (char *)malloc((strlen(p)+1)*sizeof(char));
@@ -1768,14 +1778,20 @@ static int snd_ucm_parse_section(snd_use_case_mgr_t **uc_mgr, char **cur_str,
         }
         if (enable_seq == 1) {
             ret = snd_ucm_extract_controls(current_str, &list->ena_mixer_list, list->ena_mixer_count);
-            if (ret < 0)
+            if (ret < 0) {
+                LOGV("Failed extracting a control, ignore and parse next control\n");
                 break;
-            list->ena_mixer_count++;
+            } else {
+                list->ena_mixer_count++;
+            }
         } else if (disable_seq == 1) {
             ret = snd_ucm_extract_controls(current_str, &list->dis_mixer_list, list->dis_mixer_count);
-            if (ret < 0)
+            if (ret < 0) {
+                LOGV("Failed extracting a control, ignore and parse next control\n");
                 break;
-            list->dis_mixer_count++;
+            } else {
+                list->dis_mixer_count++;
+            }
         } else if (strcasestr(current_str, "Name") != NULL) {
             ret = snd_ucm_extract_name(current_str, &list->case_name);
             if (ret < 0)
@@ -1847,11 +1863,11 @@ static int snd_ucm_parse_section(snd_use_case_mgr_t **uc_mgr, char **cur_str,
 static int snd_ucm_extract_name(char *buf, char **case_name)
 {
     int ret = 0;
-    char *p, *name = *case_name;
+    char *p, *name = *case_name, *temp_ptr;
 
-    p = strtok(buf, "\"");
+    p = strtok_r(buf, "\"", &temp_ptr);
     while (p != NULL) {
-        p = strtok(NULL, "\"");
+        p = strtok_r(NULL, "\"", &temp_ptr);
         if (p == NULL)
             break;
         name = (char *)malloc((strlen(p)+1)*sizeof(char));
@@ -1871,17 +1887,17 @@ static int snd_ucm_extract_name(char *buf, char **case_name)
  */
 static int snd_ucm_extract_acdb(char *buf, int *id, int *cap)
 {
-    char *p, key[] = "0123456789";
+    char *p, key[] = "0123456789", *temp_ptr;
 
     p = strpbrk(buf, key);
     if (p == NULL) {
         *id = 0;
         *cap = 0;
     } else {
-        p = strtok(p, ":");
+        p = strtok_r(p, ":", &temp_ptr);
         while (p != NULL) {
             *id = atoi(p);
-            p = strtok(NULL, "\0");
+            p = strtok_r(NULL, "\0", &temp_ptr);
             if (p == NULL)
                 break;
             *cap = atoi(p);
@@ -1899,12 +1915,13 @@ static int snd_ucm_extract_dev_name(char *buf, char **dev_name)
     char key[] = "0123456789";
     char *p, *name = *dev_name;
     char dev_pre[] = "hw:0,";
+    char *temp_ptr;
 
     p = strpbrk(buf, key);
     if (p == NULL) {
         *dev_name = NULL;
     } else {
-        p = strtok(p, "\r\n");
+        p = strtok_r(p, "\r\n", &temp_ptr);
         if (p == NULL) {
             *dev_name = NULL;
         } else {
@@ -1923,6 +1940,7 @@ static int get_num_values(const char *buf)
 {
     char *buf_addr, *p;
     int count = 0;
+    char *temp_ptr;
 
     buf_addr = (char *)malloc((strlen(buf)+1)*sizeof(char));
     if (buf_addr == NULL) {
@@ -1930,10 +1948,10 @@ static int get_num_values(const char *buf)
         return -ENOMEM;
     }
     strlcpy(buf_addr, buf, ((strlen(buf)+1)*sizeof(char)));
-    p = strtok(buf_addr, " ");
+    p = strtok_r(buf_addr, " ", &temp_ptr);
     while (p != NULL) {
         count++;
-        p = strtok(NULL, " ");
+        p = strtok_r(NULL, " ", &temp_ptr);
         if (p == NULL)
             break;
     }
@@ -1951,23 +1969,25 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
     char *p, *ps, *pmv, temp_coeff[20];
     mixer_control_t *list;
     static const char *const seps = "\r\n";
+    char *temp_ptr, *temp_vol_ptr;
 
-    p = strtok(buf, "'");
+    p = strtok_r(buf, "'", &temp_ptr);
     while (p != NULL) {
-        p = strtok(NULL, "'");
+        p = strtok_r(NULL, "'", &temp_ptr);
         if (p == NULL)
             break;
         list = ((*mixer_list)+size);
         list->control_name = (char *)malloc((strlen(p)+1)*sizeof(char));
         if(list->control_name == NULL) {
             ret = -ENOMEM;
-            free((*mixer_list));
             break;
         }
         strlcpy(list->control_name, p, (strlen(p)+1)*sizeof(char));
-        p = strtok(NULL, ":");
-        if (p == NULL)
+        p = strtok_r(NULL, ":", &temp_ptr);
+        if (p == NULL) {
+            free(list->control_name);
             break;
+        }
         if(!strncmp(p, "0", 1)) {
             list->type = TYPE_STR;
         } else if(!strncmp(p, "1", 1)) {
@@ -1977,9 +1997,11 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
         } else {
             LOGE("Unknown type: p %s\n", p);
         }
-        p = strtok(NULL, seps);
-        if (p == NULL)
+        p = strtok_r(NULL, seps, &temp_ptr);
+        if (p == NULL) {
+            free(list->control_name);
             break;
+        }
         if(list->type == TYPE_INT) {
             list->value = atoi(p);
             list->string = NULL;
@@ -1990,7 +2012,6 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
             list->mulval = NULL;
             if(list->string == NULL) {
                 ret = -ENOMEM;
-                free((*mixer_list));
                 free(list->control_name);
                 break;
             }
@@ -2002,24 +2023,24 @@ static int snd_ucm_extract_controls(char *buf, mixer_control_t **mixer_list, int
                 index = 0;
                 /* To support volume values in percentage */
                 if ((count == 1) && (strstr(p, "%") != NULL)) {
-                    pmv = strtok(p, " ");
+                    pmv = strtok_r(p, " ", &temp_vol_ptr);
                     while (pmv != NULL) {
                         list->mulval[index] = (char *)malloc((strlen(pmv)+1)*sizeof(char));
                         strlcpy(list->mulval[index], pmv, (strlen(pmv)+1));
                         index++;
-                        pmv = strtok(NULL, " ");
+                        pmv = strtok_r(NULL, " ", &temp_vol_ptr);
                         if (pmv == NULL)
                             break;
                     }
                 } else {
-                    pmv = strtok(p, " ");
+                    pmv = strtok_r(p, " ", &temp_vol_ptr);
                     while (pmv != NULL) {
                         temp = (uint32_t)strtoul(pmv, &ps, 16);
-                        sprintf(temp_coeff, "%lu", temp);
+                        snprintf(temp_coeff, sizeof(temp_coeff),"%lu", temp);
                         list->mulval[index] = (char *)malloc((strlen(temp_coeff)+1)*sizeof(char));
                         strlcpy(list->mulval[index], temp_coeff, (strlen(temp_coeff)+1));
                         index++;
-                        pmv = strtok(NULL, " ");
+                        pmv = strtok_r(NULL, " ", &temp_vol_ptr);
                         if (pmv == NULL)
                             break;
                     }
