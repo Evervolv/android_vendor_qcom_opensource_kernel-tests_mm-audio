@@ -701,8 +701,12 @@ static int snd_use_case_set_device_for_all_ident(snd_use_case_mgr_t *uc_mgr,
             }
             LOGV("set %d for use case value: %s", enable, use_case);
             ret = snd_use_case_apply_mixer_controls(uc_mgr, use_case, enable);
-            if (ret != 0)
+            if (ret != 0) {
                 LOGE("No valid controls exists for usecase %s and device %s, enable: %d", use_case, device, enable);
+                if (snd_use_case_apply_mixer_controls(uc_mgr, uc_mgr->card_ctxt_ptr->current_verb, enable) < 0) {
+                    LOGV("use case %s not valid without device combination also", uc_mgr->card_ctxt_ptr->current_verb);
+                }
+            }
         }
         use_case[0] = 0;
     }
@@ -723,8 +727,12 @@ static int snd_use_case_set_device_for_all_ident(snd_use_case_mgr_t *uc_mgr,
             }
             LOGV("set %d for use case value: %s", enable, use_case);
             ret = snd_use_case_apply_mixer_controls(uc_mgr, use_case, enable);
-            if (ret != 0)
+            if (ret != 0) {
                 LOGE("No valid controls exists for usecase %s and device %s, enable: %d", use_case, device, enable);
+                if (snd_use_case_apply_mixer_controls(uc_mgr, ident_value, enable) < 0) {
+                    LOGV("use case %s not valid without device combination also", ident_value);
+                }
+            }
         }
         use_case[0] = 0;
         free(ident_value);
