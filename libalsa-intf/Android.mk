@@ -210,7 +210,7 @@ LOCAL_SRC_FILES:= alsa_mixer.c alsa_pcm.c alsa_ucm.c
 LOCAL_MODULE:= libalsa-intf
 LOCAL_MODULE_TAGS := optional
 LOCAL_SHARED_LIBRARIES:= libc libcutils #libutils #libmedia libhardware_legacy
-ifeq ($(QC_PROP),true)
+ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
 LOCAL_CFLAGS := -DQC_PROP
 LOCAL_SHARED_LIBRARIES += libacdbloader
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audio-acdb-util
