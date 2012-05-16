@@ -191,6 +191,10 @@ static card_mapping_t card_mapping_list[] = {
 #define SND_USE_CASE_DEV_HDMI_TX             "HDMI Tx"
 #define SND_USE_CASE_DEV_QUAD_MIC "QMIC"
 #define SND_USE_CASE_DEV_PROXY_RX     "PROXY Rx"
+#define SND_USE_CASE_DEV_HANDSET_VOICE     "Handset Voice"
+#define SND_USE_CASE_DEV_EARPIECE_VOICE     "Earpiece Voice"
+#define SND_USE_CASE_DEV_SPEAKER_VOICE     "Speaker Voice"
+#define SND_USE_CASE_DEV_LINE_VOICE     "Line Voice"
 
 #define SND_USE_CASE_MOD_PLAY_FM         "Play FM"
 #define SND_USE_CASE_MOD_CAPTURE_FM      "Capture FM"
